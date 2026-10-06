@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createAccount, getCurrentDestination, login, type UserRole } from '@/lib/auth';
+import { createAccount, createCurrentUserJWT, getCurrentDestination, login, type UserRole } from '@/lib/auth';
 import { createProfile } from '@/lib/profile';
 
 export default function SignupPage() {
@@ -46,10 +46,11 @@ export default function SignupPage() {
       const user = await createAccount({ name: name.trim(), email: email.trim(), password });
       await login({ email: email.trim(), password });
       await createProfile({ userId: user.$id, displayName: name.trim(), role: selectedRole });
+      const jwt = await createCurrentUserJWT();
 
       const membershipResponse = await fetch('/api/teachers/membership', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.$id, role: selectedRole }),
       });
 

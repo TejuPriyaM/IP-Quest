@@ -16,6 +16,11 @@ NEXT_PUBLIC_APPWRITE_DATABASE_ID
 
 APPWRITE_API_KEY
 
+APPWRITE_QUIZ_API_KEY
+
+- APPWRITE_API_KEY is used by the server-side Teachers team membership flow.
+- APPWRITE_QUIZ_API_KEY is used by the server-side quiz submission and result flows.
+
 ## Rules
 
 - Public variables may be used by the browser.

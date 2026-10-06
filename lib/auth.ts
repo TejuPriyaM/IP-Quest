@@ -64,13 +64,25 @@ export async function login({ email, password }: AuthCredentials): Promise<Model
 	}
 }
 
-export async function createQuizJWT(): Promise<string> {
+export async function createCurrentUserJWT(): Promise<string> {
 	try {
 		const token = await getAccount().createJWT();
 		return token.jwt;
 	} catch (error) {
-		throw new AuthError(getAuthErrorMessage(error, 'Unable to authenticate quiz submission. Please try again.'));
+		const fallback = 'Unable to verify your account. Please try again.';
+		const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+		const message = code === 401
+			? 'Your session has expired. Please sign in again.'
+			: getAuthErrorMessage(error, fallback);
+		const details = process.env.NODE_ENV === 'development' && error instanceof Error
+			? ` (${code === 401 ? 'Session missing or expired' : 'Appwrite JWT request failed'}${typeof code === 'number' ? `, status ${code}` : ''}: ${error.message})`
+			: '';
+		throw new AuthError(`${message}${details}`);
 	}
+}
+
+export async function createQuizJWT(): Promise<string> {
+	return createCurrentUserJWT();
 }
 
 export async function logout(): Promise<void> {

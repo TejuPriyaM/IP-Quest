@@ -4,5 +4,5 @@ out
 coverage
 npm-debug.log*
 .DS_Store
-*.tsbuildinfo 
+*.tsbuildinfo
 .env.local

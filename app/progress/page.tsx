@@ -7,7 +7,6 @@ export default function ProgressPage() {
       <SectionHeader
         title="Progress tracker"
         description="Your learning journey is being prepared. This page will show milestones, streaks, and achievements in a later phase."
-        headingLevel="h1"
       />
 
       <div className="mt-10 grid gap-6 md:grid-cols-2">

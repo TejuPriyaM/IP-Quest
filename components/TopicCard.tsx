@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import type { Topic } from '@/data/mockTopics';
 
 type TopicCardProps = {
@@ -114,9 +113,9 @@ export default function TopicCard({ topic }: TopicCardProps) {
 
       <p className="mt-5 text-sm leading-6 text-slate-600">{topic.educationalSummary}</p>
 
-      <Link href={`/games/quiz?topic=${topic.id}`} className="mt-6 inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2">
-        Practice quiz
-      </Link>
+      <button type="button" className="mt-6 inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2">
+        Learn now
+      </button>
     </article>
   );
 }

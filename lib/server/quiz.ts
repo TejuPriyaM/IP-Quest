@@ -1,7 +1,8 @@
 import 'server-only';
 
-import { Account, Client, ID, Query, TablesDB, type Models } from 'node-appwrite';
+import { Client, ID, Query, TablesDB, type Models } from 'node-appwrite';
 import { appwriteConfig } from '@/lib/appwrite';
+import { verifyQuizStudent } from '@/lib/server/level-quiz';
 
 const questionsTableId = 'questions';
 const quizAttemptsTableId = 'quiz_attempts';
@@ -34,6 +35,11 @@ type CanonicalQuestion = Models.Row & {
 	explanation: string;
 };
 
+export type StudentQuizQuestion = Pick<
+	CanonicalQuestion,
+	'$id' | 'topic_id' | 'question_text' | 'options' | 'difficulty'
+>;
+
 type QuizAttempt = Models.Row & {
 	user_id: string;
 	topic_id: string;
@@ -50,17 +56,6 @@ export class QuizSubmissionError extends Error {
 		this.name = 'QuizSubmissionError';
 		this.statusCode = statusCode;
 	}
-}
-
-function getServerAppwriteClient(jwt: string) {
-	if (!appwriteConfig.endpoint || !appwriteConfig.projectId) {
-		throw new QuizSubmissionError('Server-side Appwrite configuration is incomplete.', 500);
-	}
-
-	return new Client()
-		.setEndpoint(appwriteConfig.endpoint)
-		.setProject(appwriteConfig.projectId)
-		.setJWT(jwt);
 }
 
 function getQuizAppwriteClient() {
@@ -130,19 +125,13 @@ function getAppwriteError(error: unknown, fallback: string) {
 export async function submitQuiz(submission: QuizSubmission): Promise<QuizSubmissionResult> {
 	assertSubmissionShape(submission);
 
-	const client = getServerAppwriteClient(submission.jwt.trim());
-	const account = new Account(client);
 	let user: Models.User<Models.Preferences>;
-
 	try {
-		user = await account.get();
+		user = await verifyQuizStudent(submission.jwt.trim());
 	} catch (error) {
-		const code = getErrorCode(error);
-		if (code === 401) {
-			throw new QuizSubmissionError('Authentication failed. Please sign in again.', 401);
-		}
-		if (code === 403) {
-			throw new QuizSubmissionError('You do not have permission to submit this quiz.', 403);
+		const code = error instanceof Error && 'statusCode' in error ? error.statusCode : undefined;
+		if (code === 401 || code === 403) {
+			throw new QuizSubmissionError(error instanceof Error ? error.message : 'You do not have permission to submit this quiz.', code);
 		}
 		throw new QuizSubmissionError('Unable to authenticate the quiz submission.', 500);
 	}
@@ -220,3 +209,54 @@ export async function submitQuiz(submission: QuizSubmission): Promise<QuizSubmis
 		percentage,
 	};
 }
+
+export async function loadQuizQuestions(jwt: string, topicId: string): Promise<StudentQuizQuestion[]> {
+	if (typeof jwt !== 'string' || !jwt.trim()) {
+		throw new QuizSubmissionError('Authentication is required.', 401);
+	}
+
+	if (typeof topicId !== 'string' || !topicId.trim()) {
+		throw new QuizSubmissionError('A valid topic is required.', 400);
+	}
+
+	try {
+		await verifyQuizStudent(jwt.trim());
+	} catch (error) {
+		const code = error instanceof Error && 'statusCode' in error ? error.statusCode : undefined;
+		if (code === 401 || code === 403) {
+			throw new QuizSubmissionError(error instanceof Error ? error.message : 'You do not have permission to load this quiz.', code);
+		}
+		throw new QuizSubmissionError('Unable to authenticate the quiz request.', 500);
+	}
+
+	const tablesDb = new TablesDB(getQuizAppwriteClient());
+	const databaseId = appwriteConfig.databaseId;
+	if (!databaseId) {
+		throw new QuizSubmissionError('Appwrite database configuration is incomplete.', 500);
+	}
+
+	let questions: CanonicalQuestion[];
+	try {
+		const response = await tablesDb.listRows<CanonicalQuestion>({
+			databaseId,
+			tableId: questionsTableId,
+			queries: [
+				Query.equal('topic_id', topicId.trim()),
+				Query.equal('is_published', true),
+				Query.orderAsc('$id'),
+			],
+		});
+		questions = response.rows;
+	} catch {
+		throw new QuizSubmissionError('Unable to load quiz questions.', 500);
+	}
+
+	return questions.map((question) => ({
+		$id: question.$id,
+		topic_id: question.topic_id,
+		question_text: question.question_text,
+		options: question.options,
+		difficulty: question.difficulty,
+	}));
+}
+

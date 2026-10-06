@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { getCurrentProfile, getRoleBasedRoute, logout, type UserRole } from '@/lib/auth';
 
 const publicLinks = [
@@ -99,7 +98,6 @@ export default function Navbar() {
           className="inline-flex rounded-lg border border-slate-200 p-2 text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 md:hidden"
           aria-label="Toggle navigation menu"
           aria-expanded={isOpen}
-          aria-controls="mobile-navigation"
           onClick={() => setIsOpen((open) => !open)}
         >
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5" aria-hidden="true">
@@ -113,7 +111,7 @@ export default function Navbar() {
       </nav>
 
       {isOpen && (
-        <div id="mobile-navigation" className="border-t border-slate-200 bg-white md:hidden">
+        <div className="border-t border-slate-200 bg-white md:hidden">
           <div className="section-shell flex flex-col gap-2 py-4">
             {links.map((link) => {
               const isActive = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href);

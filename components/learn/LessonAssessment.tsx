@@ -19,8 +19,11 @@ type AssessmentQuestion = {
 type ActiveAssessment = {
   topicId: string;
   topicTitle: string;
+  topicDescription: string;
   lessonId: string;
   lessonTitle: string;
+  lessonContent: string;
+  estimatedMinutes: number;
   questions: AssessmentQuestion[];
 };
 
@@ -171,10 +174,22 @@ export default function LessonAssessment({ topic }: { topic: { id: string; title
           <div>
             <p className="text-xs font-semibold uppercase text-brand-600">{activeAssessment.topicTitle} · Lesson assessment</p>
             <h2 className="mt-1 text-lg font-bold text-slate-900">{activeAssessment.lessonTitle}</h2>
+            {activeAssessment.estimatedMinutes > 0 && <p className="mt-1 text-sm text-slate-500">{activeAssessment.estimatedMinutes} minutes</p>}
             <p className="mt-2 text-sm text-slate-500">Question {currentIndex + 1} of {activeAssessment.questions.length}</p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{question.difficulty}</span>
         </div>
+        {(activeAssessment.topicDescription || activeAssessment.lessonContent) && (
+          <article className="mt-6 rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+            {activeAssessment.topicDescription && <p className="text-sm leading-6 text-slate-600">{activeAssessment.topicDescription}</p>}
+            {activeAssessment.lessonContent && (
+              <div className={activeAssessment.topicDescription ? 'mt-5 border-t border-slate-200 pt-5' : ''}>
+                <h3 className="font-bold text-slate-900">Lesson content</h3>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">{activeAssessment.lessonContent}</p>
+              </div>
+            )}
+          </article>
+        )}
         <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
           <h3 id="lesson-assessment-question-heading" className="break-words text-xl font-bold leading-8 text-slate-900">{question.question}</h3>
           <div className="mt-5 grid gap-3">

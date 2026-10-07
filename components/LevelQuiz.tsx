@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { createQuizJWT } from '@/lib/auth';
 
@@ -17,23 +18,12 @@ type LevelState = {
   inProgressAttemptId: string | null;
 };
 
-type QuizAttemptHistory = {
-  attemptId: string;
-  level: number;
-  score: number;
-  totalQuestions: number;
-  percentage: number;
-  passed: boolean;
-  completedAt: string;
-};
-
 type ProgressPayload = {
   topicId: string;
   topicTitle: string;
   passPercentage: number;
   questionsPerLevel: number;
   levels: LevelState[];
-  attemptHistory: QuizAttemptHistory[];
 };
 
 type LevelCompletionResult = {
@@ -76,66 +66,8 @@ type StartedAttempt = {
   answersById: Record<string, string>;
 };
 
-const historyChartColors = ['#2563eb', '#059669', '#d97706'];
-
-function formatAttemptDate(value: string) {
+function formatCompletedDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value));
-}
-
-function QuizHistoryChart({ attempts }: { attempts: QuizAttemptHistory[] }) {
-  if (attempts.length === 0) {
-    return <p className="mt-4 text-sm text-slate-600">Complete a level to start building your quiz history.</p>;
-  }
-
-  const width = 720;
-  const height = 240;
-  const left = 42;
-  const right = 16;
-  const top = 16;
-  const bottom = 30;
-  const plotWidth = width - left - right;
-  const plotHeight = height - top - bottom;
-  const points = attempts.map((attempt, index) => ({
-    ...attempt,
-    x: left + (attempts.length === 1 ? plotWidth / 2 : (index / (attempts.length - 1)) * plotWidth),
-    y: top + ((100 - attempt.percentage) / 100) * plotHeight,
-  }));
-
-  return (
-    <div className="mt-4">
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white p-2 sm:p-4">
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label="Quiz score history from oldest to newest attempt">
-          {[0, 50, 100].map((percentage) => {
-            const y = top + ((100 - percentage) / 100) * plotHeight;
-            return (
-              <g key={percentage}>
-                <line x1={left} x2={width - right} y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="4 5" />
-                <text x={left - 8} y={y + 4} textAnchor="end" fill="#64748b" fontSize="12">{percentage}%</text>
-              </g>
-            );
-          })}
-          {points.length > 1 && <polyline points={points.map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="#94a3b8" strokeWidth="2" />}
-          {points.map((point) => (
-            <circle key={point.attemptId} cx={point.x} cy={point.y} r="5" fill={historyChartColors[point.level - 1] ?? '#64748b'} stroke="white" strokeWidth="2">
-              <title>{`Level ${point.level}: ${point.percentage}% on ${formatAttemptDate(point.completedAt)}`}</title>
-            </circle>
-          ))}
-        </svg>
-        <div className="flex justify-between px-9 text-xs text-slate-500">
-          <span>{formatAttemptDate(attempts[0].completedAt)}</span>
-          <span>{formatAttemptDate(attempts[attempts.length - 1].completedAt)}</span>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-600" aria-label="Chart legend">
-        {[1, 2, 3].map((level) => (
-          <span key={level} className="inline-flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: historyChartColors[level - 1] }} />
-            Level {level}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 async function quizRequest<T>(url: string, body?: Record<string, unknown>): Promise<T> {
@@ -263,15 +195,6 @@ export default function LevelQuiz({ topic, initialLevel }: { topic: QuizTopic; i
           passed: level.level === result.level ? level.passed || result.passed : level.passed,
           unlocked: level.level === result.level + 1 ? level.unlocked || result.passed : level.unlocked,
         })),
-        attemptHistory: [...current.attemptHistory.filter((attempt) => attempt.attemptId !== result.attemptId), {
-          attemptId: result.attemptId,
-          level: result.level,
-          score: result.score,
-          totalQuestions: result.totalQuestions,
-          percentage: result.percentage,
-          passed: result.passed,
-          completedAt: result.completedAt,
-        }].sort((first, second) => new Date(first.completedAt).getTime() - new Date(second.completedAt).getTime()),
       } : current);
       void quizRequest<ProgressPayload>(`/api/quiz/levels?topicId=${encodeURIComponent(topic.id)}`)
         .then(setProgress)
@@ -298,7 +221,7 @@ export default function LevelQuiz({ topic, initialLevel }: { topic: QuizTopic; i
         <div className="mt-5 grid grid-cols-2 gap-4 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-3">
           <div><p className="text-3xl font-bold text-brand-700">{completedResult.percentage}%</p><p className="mt-1 text-sm text-slate-500">Final score</p></div>
           <div><p className="text-3xl font-bold text-slate-900">{completedResult.score}/{completedResult.totalQuestions}</p><p className="mt-1 text-sm text-slate-500">Correct answers</p></div>
-          <div className="col-span-2 sm:col-span-1"><p className="text-lg font-semibold text-slate-900">{formatAttemptDate(completedResult.completedAt)}</p><p className="mt-1 text-sm text-slate-500">Completed</p></div>
+          <div className="col-span-2 sm:col-span-1"><p className="text-lg font-semibold text-slate-900">{formatCompletedDate(completedResult.completedAt)}</p><p className="mt-1 text-sm text-slate-500">Completed</p></div>
         </div>
         {!completedResult.passed && completedResult.level < 3 && (
           <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
@@ -399,59 +322,7 @@ export default function LevelQuiz({ topic, initialLevel }: { topic: QuizTopic; i
           ))}
         </div>
       </div>
-      <section id="level-quiz-overall" className="glass-card p-5 sm:p-7" aria-labelledby="level-quiz-overall-heading">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600">Performance history</p>
-        <h2 id="level-quiz-overall-heading" className="mt-2 text-2xl font-bold text-slate-900">Overall results</h2>
-        {(() => {
-          const bestByLevel = [1, 2, 3].map((level) => {
-            const attempts = (progress?.attemptHistory ?? []).filter((attempt) => attempt.level === level);
-            return attempts.sort((first, second) => second.percentage - first.percentage)[0];
-          });
-          const allLevelsAttempted = bestByLevel.every((attempt) => attempt !== undefined);
-          const bestTotal = bestByLevel.reduce((total, attempt) => total + (attempt?.score ?? 0), 0);
-          const questionTotal = bestByLevel.reduce((total, attempt) => total + (attempt?.totalQuestions ?? 0), 0);
-          const overallPercentage = questionTotal > 0 ? Math.round((bestTotal / questionTotal) * 100) : 0;
-
-          return (
-            <>
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                {bestByLevel.map((attempt, index) => (
-                  <article key={index} className="rounded-xl border border-slate-200 bg-white p-4">
-                    <h3 className="font-bold text-slate-900">Level {index + 1}</h3>
-                    {attempt ? (
-                      <>
-                        <p className="mt-2 text-xl font-bold text-brand-700">{attempt.percentage}%</p>
-                        <p className="mt-1 text-sm text-slate-600">Best: {attempt.score}/{attempt.totalQuestions}</p>
-                        <p className="mt-1 text-xs text-slate-500">{(progress?.attemptHistory ?? []).filter((item) => item.level === index + 1).length} attempt(s)</p>
-                      </>
-                    ) : <p className="mt-2 text-sm text-slate-500">No completed attempts</p>}
-                  </article>
-                ))}
-              </div>
-              <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-600">Overall best across all three levels</p>
-                <p className="mt-1 text-3xl font-bold text-brand-700">{allLevelsAttempted ? `${overallPercentage}%` : '--'}</p>
-                <p className="mt-1 text-sm text-slate-500">{allLevelsAttempted ? `${bestTotal}/${questionTotal} correct` : 'Complete all three levels to see an overall score.'}</p>
-              </div>
-              <h3 className="mt-6 font-bold text-slate-900">Score over time</h3>
-              <QuizHistoryChart attempts={progress?.attemptHistory ?? []} />
-              {(progress?.attemptHistory.length ?? 0) > 0 && (
-                <div className="mt-5 border-t border-slate-200 pt-4">
-                  <h3 className="font-bold text-slate-900">Recent attempts</h3>
-                  <ul className="mt-3 space-y-2">
-                    {[...(progress?.attemptHistory ?? [])].slice(-5).reverse().map((attempt) => (
-                      <li key={attempt.attemptId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
-                        <span className="text-slate-600">{formatAttemptDate(attempt.completedAt)} · Level {attempt.level}</span>
-                        <span className="font-semibold text-slate-900">{attempt.score}/{attempt.totalQuestions} ({attempt.percentage}%) · {attempt.passed ? 'Passed' : 'Not passed'}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </>
-          );
-        })()}
-      </section>
+      <Link href="/progress" className="btn-secondary inline-flex">View performance history</Link>
       <p className="text-sm text-slate-500">Each level has {progress?.questionsPerLevel ?? 10} questions. Your answers are saved as you go.</p>
     </section>
   );

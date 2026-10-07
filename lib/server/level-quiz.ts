@@ -9,6 +9,7 @@ import { QUIZ_LEVEL_COUNT, QUIZ_PASS_PERCENTAGE, QUIZ_QUESTIONS_PER_LEVEL } from
 const questionsTableId = 'questions';
 const quizAttemptsTableId = 'quiz_attempts';
 const topicsTableId = 'topics';
+const lessonsTableId = 'lessons';
 const profilesTableId = 'profiles';
 
 type QuestionRow = Models.Row & {
@@ -38,6 +39,8 @@ type AttemptResponses = {
   version: 1;
   questionIds: string[];
   answers: StoredAnswer[];
+  optionOrders?: Record<string, string[]>;
+  hintsById?: Record<string, string>;
 };
 
 type QuizAttempt = Models.Row & {
@@ -46,11 +49,25 @@ type QuizAttempt = Models.Row & {
   score: number;
   total_questions: number;
   completed_at: string;
+  lesson_id?: string | null;
   level?: number | null;
   status?: string | null;
   passed?: boolean | null;
   responses?: string | null;
 };
+
+type PerformanceHistoryEntry = {
+  attemptId: string;
+  topicId: string;
+  topicTitle: string;
+  score: number;
+  totalQuestions: number;
+  percentage: number;
+  completedAt: string;
+} & (
+  | { kind: 'level'; level: number; passed: boolean }
+  | { kind: 'assessment'; lessonId: string; lessonTitle: string }
+);
 
 export type LevelQuizErrorStatus = 400 | 401 | 403 | 404 | 409 | 500;
 
@@ -204,7 +221,27 @@ function parseResponses(value: string | null | undefined): AttemptResponses | nu
     const questionIds = candidate.questionIds as string[];
     if (new Set(questionIds).size !== questionIds.length || new Set(answers.map((answer) => answer.questionId)).size !== answers.length) return null;
     if (answers.some((answer) => !questionIds.includes(answer.questionId))) return null;
-    return { version: 1, questionIds, answers };
+    let optionOrders: Record<string, string[]> | undefined;
+    if (candidate.optionOrders !== undefined) {
+      if (typeof candidate.optionOrders !== 'object' || candidate.optionOrders === null || Array.isArray(candidate.optionOrders)) return null;
+      const parsedOptionOrders: Record<string, string[]> = {};
+      for (const [questionId, options] of Object.entries(candidate.optionOrders)) {
+        if (!questionIds.includes(questionId) || !Array.isArray(options) || !options.every((option) => typeof option === 'string')) return null;
+        parsedOptionOrders[questionId] = options;
+      }
+      optionOrders = parsedOptionOrders;
+    }
+    let hintsById: Record<string, string> | undefined;
+    if (candidate.hintsById !== undefined) {
+      if (typeof candidate.hintsById !== 'object' || candidate.hintsById === null || Array.isArray(candidate.hintsById)) return null;
+      const parsedHints: Record<string, string> = {};
+      for (const [questionId, hint] of Object.entries(candidate.hintsById)) {
+        if (!questionIds.includes(questionId) || typeof hint !== 'string') return null;
+        parsedHints[questionId] = hint;
+      }
+      hintsById = parsedHints;
+    }
+    return { version: 1, questionIds, answers, ...(optionOrders ? { optionOrders } : {}), ...(hintsById ? { hintsById } : {}) };
   } catch {
     return null;
   }
@@ -297,7 +334,25 @@ function sanitizeQuestion(question: QuestionRow) {
   };
 }
 
-async function getAttemptRows(userId: string, topicId: string) {
+const fallbackHints = [
+  'Look for the key idea in the question, then eliminate options that do not match.',
+  'Compare each option with what you remember about this topic.',
+  'Choose the most accurate answer, not just one that sounds related.',
+];
+
+function createQuestionPresentation(questions: QuestionRow[]) {
+  const hintedQuestions = shuffle(questions).slice(0, 3);
+  const shuffledFallbackHints = shuffle(fallbackHints);
+  return {
+    optionOrders: Object.fromEntries(questions.map((question) => [question.$id, shuffle(question.options)])),
+    hintsById: Object.fromEntries(hintedQuestions.map((question, index) => [
+      question.$id,
+      question.hint?.trim() || shuffledFallbackHints[index % shuffledFallbackHints.length],
+    ])),
+  };
+}
+
+async function getAttemptRows(userId: string, topicId?: string) {
   const tablesDb = getPrivilegedTables();
   const databaseId = getDatabaseId();
   const rows: QuizAttempt[] = [];
@@ -307,7 +362,7 @@ async function getAttemptRows(userId: string, topicId: string) {
     while (true) {
       const queries = [
         Query.equal('user_id', userId),
-        Query.equal('topic_id', topicId),
+        ...(topicId ? [Query.equal('topic_id', topicId)] : []),
         Query.orderDesc('$createdAt'),
         Query.limit(100),
         ...(cursor ? [Query.cursorAfter(cursor)] : []),
@@ -335,24 +390,11 @@ export async function getLevelQuizProgress(jwt: string, topicId: string) {
   const topic = await getVerifiedTopic(topicId);
   const attempts = await getAttemptRows(user.$id, topicId);
   const passed = passedLevels(attempts);
-  const attemptHistory = attempts
-    .filter((attempt) => attempt.status === 'completed' && Number.isInteger(attempt.level) && attempt.total_questions > 0)
-    .map((attempt) => ({
-      attemptId: attempt.$id,
-      level: attempt.level as number,
-      score: attempt.score,
-      totalQuestions: attempt.total_questions,
-      percentage: Math.round((attempt.score / attempt.total_questions) * 100),
-      passed: attempt.passed === true,
-      completedAt: attempt.completed_at,
-    }))
-    .sort((first, second) => new Date(first.completedAt).getTime() - new Date(second.completedAt).getTime());
 
   return {
     topicId,
     passPercentage: QUIZ_PASS_PERCENTAGE,
     questionsPerLevel: QUIZ_QUESTIONS_PER_LEVEL,
-    attemptHistory,
     levels: Array.from({ length: QUIZ_LEVEL_COUNT }, (_, index) => {
       const level = index + 1;
       const inProgress = attempts.find((attempt) => attempt.level === level && attempt.status === 'in_progress');
@@ -364,6 +406,61 @@ export async function getLevelQuizProgress(jwt: string, topicId: string) {
       };
     }),
     topicTitle: topic.title ?? 'Quiz',
+  };
+}
+
+export async function getStudentPerformanceHistory(jwt: string) {
+  const user = await verifyQuizStudent(jwt);
+  const attempts = (await getAttemptRows(user.$id)).filter((attempt) =>
+    attempt.total_questions > 0 && Number.isInteger(attempt.score) && typeof attempt.completed_at === 'string',
+  );
+  const topicIds = Array.from(new Set(attempts.map((attempt) => attempt.topic_id)));
+  const lessonIds = Array.from(new Set(attempts.map((attempt) => attempt.lesson_id).filter((lessonId): lessonId is string => Boolean(lessonId))));
+  const tablesDb = getPrivilegedTables();
+
+  const [topicRows, lessonRows] = await Promise.all([
+    Promise.all(topicIds.map(async (topicId) => {
+      try {
+        return await tablesDb.getRow<Models.Row & { title?: string }>({ databaseId: getDatabaseId(), tableId: topicsTableId, rowId: topicId });
+      } catch {
+        return null;
+      }
+    })),
+    Promise.all(lessonIds.map(async (lessonId) => {
+      try {
+        return await tablesDb.getRow<Models.Row & { title?: string }>({ databaseId: getDatabaseId(), tableId: lessonsTableId, rowId: lessonId });
+      } catch {
+        return null;
+      }
+    })),
+  ]);
+  const topicTitles = new Map(topicRows.filter((row): row is Models.Row & { title?: string } => row !== null).map((row) => [row.$id, row.title ?? 'Learning topic']));
+  const lessonTitles = new Map(lessonRows.filter((row): row is Models.Row & { title?: string } => row !== null).map((row) => [row.$id, row.title ?? 'Lesson assessment']));
+
+  const history = attempts.reduce<PerformanceHistoryEntry[]>((entries, attempt) => {
+      if (attempt.status !== 'completed' && !attempt.lesson_id) return entries;
+      const common = {
+        attemptId: attempt.$id,
+        topicId: attempt.topic_id,
+        topicTitle: topicTitles.get(attempt.topic_id) ?? 'Learning topic',
+        score: attempt.score,
+        totalQuestions: attempt.total_questions,
+        percentage: Math.round((attempt.score / attempt.total_questions) * 100),
+        completedAt: attempt.completed_at,
+      };
+      if (attempt.lesson_id) {
+        entries.push({ ...common, kind: 'assessment', lessonId: attempt.lesson_id, lessonTitle: lessonTitles.get(attempt.lesson_id) ?? 'Lesson assessment' });
+        return entries;
+      }
+      if (Number.isInteger(attempt.level)) {
+        entries.push({ ...common, kind: 'level', level: attempt.level as number, passed: attempt.passed === true });
+      }
+      return entries;
+    }, []).sort((first, second) => new Date(first.completedAt).getTime() - new Date(second.completedAt).getTime());
+
+  return {
+    levelAttempts: history.filter((attempt) => attempt.kind === 'level'),
+    lessonAssessments: history.filter((attempt) => attempt.kind === 'assessment'),
   };
 }
 
@@ -392,7 +489,12 @@ export async function startOrResumeLevel(jwt: string, topicId: string, level: nu
       throw new LevelQuizError('This level is not ready yet. More questions are being added.', 409);
     }
     const questionIds = shuffle(candidates.map((question) => question.$id)).slice(0, QUIZ_QUESTIONS_PER_LEVEL);
-    responses = { version: 1, questionIds, answers: [] };
+    const questionById = new Map(candidates.map((question) => [question.$id, question]));
+    const presentation = createQuestionPresentation(questionIds.flatMap((questionId) => {
+      const question = questionById.get(questionId);
+      return question ? [question] : [];
+    }));
+    responses = { version: 1, questionIds, answers: [], ...presentation };
     try {
       attempt = await getPrivilegedTables().createRow<QuizAttempt>({
         databaseId: getDatabaseId(),
@@ -428,6 +530,20 @@ export async function startOrResumeLevel(jwt: string, topicId: string, level: nu
       throw new LevelQuizError('A saved question is no longer available for this attempt.', 409);
     }
   }));
+  if (!responses.optionOrders || !responses.hintsById) {
+    const presentation = createQuestionPresentation(questionRows);
+    responses = { ...responses, ...presentation };
+    try {
+      await tablesDb.updateRow<QuizAttempt>({
+        databaseId: getDatabaseId(),
+        tableId: quizAttemptsTableId,
+        rowId: attempt.$id,
+        data: { responses: serializeResponses(responses) },
+      });
+    } catch {
+      throw new LevelQuizError('Unable to save this quiz question order. Please try again.', 500);
+    }
+  }
   const answersById = new Map(responses.answers.map((answer) => [answer.questionId, answer]));
 
   return {
@@ -436,7 +552,11 @@ export async function startOrResumeLevel(jwt: string, topicId: string, level: nu
     topicTitle: topic.title ?? 'Quiz',
     level,
     passPercentage: QUIZ_PASS_PERCENTAGE,
-    questions: questionRows.map(sanitizeQuestion),
+    questions: questionRows.map((question) => ({
+      ...sanitizeQuestion(question),
+      options: responses.optionOrders?.[question.$id] ?? question.options,
+      hint: responses.hintsById?.[question.$id] ?? '',
+    })),
     answers: responses.answers,
     answerFeedback: responses.answers.map((answer) => {
       const question = questionRows.find((item) => item.$id === answer.questionId);

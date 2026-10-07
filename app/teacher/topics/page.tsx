@@ -1,8 +1,11 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import AuthGuard from '@/components/AuthGuard';
-import { createTopic, deleteTopic, listTopics, type Topic, type TopicRow, updateTopic } from '@/lib/topics';
+import { deleteTopic, listTopics, type Topic, type TopicRow } from '@/lib/topics';
+
+const topicAssessmentDraftKey = 'ip-quest-teacher-assessment-draft';
 
 const emptyTopic: Topic = {
   title: '',
@@ -25,6 +28,7 @@ function getTopicFromRow(row: TopicRow): Topic {
 }
 
 export default function TeacherTopicsPage() {
+  const router = useRouter();
   const [topics, setTopics] = useState<TopicRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -33,7 +37,6 @@ export default function TeacherTopicsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTopic, setEditingTopic] = useState<TopicRow | null>(null);
   const [form, setForm] = useState<Topic>(emptyTopic);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function loadTopics() {
@@ -79,7 +82,7 @@ export default function TeacherTopicsPage() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setActionError('');
     setSuccessMessage('');
@@ -98,24 +101,8 @@ export default function TeacherTopicsPage() {
       is_published: form.is_published,
     };
 
-    setIsSubmitting(true);
-
-    try {
-      if (editingTopic) {
-        await updateTopic(editingTopic.$id, topic);
-        setSuccessMessage('Topic updated successfully.');
-      } else {
-        await createTopic(topic);
-        setSuccessMessage('Topic created successfully.');
-      }
-
-      closeForm();
-      await loadTopics();
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Unable to save topic. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    sessionStorage.setItem(topicAssessmentDraftKey, JSON.stringify({ topicId: editingTopic?.$id ?? null, topic }));
+    router.push('/teacher/assessment?draft=1');
   }
 
   async function handleDelete(topic: TopicRow) {
@@ -187,7 +174,7 @@ export default function TeacherTopicsPage() {
                 Published
               </label>
               <div className="sm:col-span-2">
-                <button type="submit" disabled={isSubmitting} className="btn-primary disabled:cursor-not-allowed disabled:opacity-60">{isSubmitting ? 'Saving...' : editingTopic ? 'Update Topic' : 'Create Topic'}</button>
+                <button type="submit" className="btn-primary">Continue to Assessment</button>
               </div>
             </form>
           </section>
@@ -213,7 +200,8 @@ export default function TeacherTopicsPage() {
                       <p className="mt-2 text-sm text-slate-500">/{topic.slug}</p>
                       {topic.description && <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">{topic.description}</p>}
                     </div>
-                    <div className="flex shrink-0 gap-3">
+                    <div className="flex shrink-0 flex-wrap gap-3">
+                      <button type="button" onClick={() => router.push(`/teacher/assessment?topicId=${encodeURIComponent(topic.$id)}`)} className="btn-primary">Assessment</button>
                       <button type="button" onClick={() => openEditForm(topic)} className="btn-secondary">Edit</button>
                       <button type="button" onClick={() => handleDelete(topic)} disabled={deletingId === topic.$id} className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60">{deletingId === topic.$id ? 'Deleting...' : 'Delete'}</button>
                     </div>

@@ -3,10 +3,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import LevelQuiz from '@/components/LevelQuiz';
+import QuizRunner from '@/components/QuizRunner';
 import LessonAssessment from '@/components/learn/LessonAssessment';
 import AnimationVideo from '@/components/learn/AnimationVideo';
 import LearnSidebar from '@/components/learn/LearnSidebar';
 import TechnicalAnimation from '@/components/learn/TechnicalAnimation';
+import { getCurrentProfile, type UserRole } from '@/lib/auth';
 import { listLessonsByTopic, type Lesson } from '@/lib/lessons';
 import { getLearnTopicForModule, type LearnModule } from '@/lib/learn';
 import { listTopics, type TopicRow } from '@/lib/topics';
@@ -686,6 +688,33 @@ export default function LearnModuleView({ module }: LearnModuleViewProps) {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<SectionTab>('Story');
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [hasResolvedRole, setHasResolvedRole] = useState(false);
+  const [teacherQuizActive, setTeacherQuizActive] = useState(false);
+
+  useEffect(() => {
+    setTeacherQuizActive(false);
+  }, [module.key]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    getCurrentProfile()
+      .then((currentProfile) => {
+        if (!isActive) return;
+        setUserRole(currentProfile?.role ?? null);
+        setHasResolvedRole(true);
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setUserRole(null);
+        setHasResolvedRole(true);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -873,7 +902,46 @@ export default function LearnModuleView({ module }: LearnModuleViewProps) {
       case 'Flash Cards':
         return <FlashCards key={module.key} module={module} />;
       case 'Quiz':
-        return activeTopic ? (
+        if (!hasResolvedRole) {
+          return <p className="glass-card p-6 text-sm text-slate-500" role="status">Checking your account...</p>;
+        }
+        if (userRole === 'teacher') {
+          return (
+            <SectionCard title="Teacher Quiz Management" primary>
+              <p className="text-sm leading-6 text-slate-600">Manage this module&apos;s published quiz questions, create new questions, or edit existing ones.</p>
+              <a href={activeTopic ? `/teacher/questions?topicId=${encodeURIComponent(activeTopic.$id)}&from=learn` : '/teacher/questions?from=learn'} className="btn-primary mt-5 inline-flex">Open question manager</a>
+            </SectionCard>
+          );
+        }
+        if (userRole !== 'student') {
+          return (
+            <SectionCard title="Student account required" primary>
+              <p className="text-sm leading-6 text-slate-600">Sign in with a Student account to take this quiz.</p>
+              <Link href="/login" className="btn-primary mt-5 inline-flex">Log in</Link>
+            </SectionCard>
+          );
+        }
+        if (!activeTopic) {
+          return <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Quiz is not available yet for this module.</p>;
+        }
+
+        if (teacherQuizActive) {
+          return (
+            <QuizRunner
+              key={`${activeTopic.$id}-teacher`}
+              topic={{
+                id: activeTopic.$id,
+                title: activeTopic.title,
+                description: activeTopic.description,
+                difficulty: activeTopic.difficulty,
+              }}
+              mode="teacher"
+              onExit={() => setTeacherQuizActive(false)}
+            />
+          );
+        }
+
+        return (
           <LevelQuiz
             key={activeTopic.$id}
             topic={{
@@ -882,11 +950,29 @@ export default function LearnModuleView({ module }: LearnModuleViewProps) {
               description: activeTopic.description,
               difficulty: activeTopic.difficulty,
             }}
+            onTeacherQuiz={() => setTeacherQuizActive(true)}
           />
-        ) : (
-          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Quiz is not available yet for this module.</p>
         );
       case 'Assessment':
+        if (!hasResolvedRole) {
+          return <p className="glass-card p-6 text-sm text-slate-500" role="status">Checking your account...</p>;
+        }
+        if (userRole === 'teacher') {
+          return (
+            <SectionCard title="Teacher Assessment Management" primary>
+              <p className="text-sm leading-6 text-slate-600">Manage assessment questions by topic and lesson, or create a new assessment question.</p>
+              <a href={activeTopic ? `/teacher/assessment?topicId=${encodeURIComponent(activeTopic.$id)}&from=learn` : '/teacher/assessment?from=learn'} className="btn-primary mt-5 inline-flex">Open assessment manager</a>
+            </SectionCard>
+          );
+        }
+        if (userRole !== 'student') {
+          return (
+            <SectionCard title="Student account required" primary>
+              <p className="text-sm leading-6 text-slate-600">Sign in with a Student account to take this assessment.</p>
+              <Link href="/login" className="btn-primary mt-5 inline-flex">Log in</Link>
+            </SectionCard>
+          );
+        }
         return activeTopic ? <LessonAssessment topic={{ id: activeTopic.$id, title: activeTopic.title }} /> : (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <p className="text-lg font-bold text-slate-900">Assessment coming soon</p>

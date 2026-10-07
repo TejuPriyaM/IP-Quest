@@ -8,6 +8,7 @@ import { getCurrentProfile, getCurrentUser } from '@/lib/auth';
 const dashboardCards = [
   { title: 'Topics', description: 'Manage learning topics.', href: '/teacher/topics', icon: 'T', tone: 'blue' },
   { title: 'Lessons', description: 'Create and manage lesson content.', href: '/teacher/lessons', icon: 'L', tone: 'green' },
+  { title: 'Topic Assessment', description: 'Complete topic assessment data before creating or updating a topic.', href: '/teacher/assessment', icon: 'A', tone: 'amber' },
   { title: 'Questions / Quizzes', description: 'Manage quiz questions and assessments.', href: '/teacher/questions', icon: 'Q', tone: 'amber' },
   { title: 'Student Progress', description: 'View student learning progress.', href: '/teacher/progress', icon: 'P', tone: 'violet' },
 ] as const;

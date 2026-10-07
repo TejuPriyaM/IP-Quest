@@ -24,6 +24,12 @@ type QuizSubmissionResult = {
   attemptId: string;
 };
 
+type TeacherQuizResult = {
+  score: number;
+  totalQuestions: number;
+  percentage: number;
+};
+
 type QuizTopic = {
   id: string;
   title: string;
@@ -33,6 +39,8 @@ type QuizTopic = {
 
 type QuizRunnerProps = {
   topic: QuizTopic;
+  mode?: 'standard' | 'teacher';
+  onExit?: () => void;
 };
 
 function isApiQuestion(value: unknown): value is ApiQuestion {
@@ -59,9 +67,16 @@ function isQuizSubmissionResult(value: unknown): value is QuizSubmissionResult {
   );
 }
 
-export default function QuizRunner({ topic }: QuizRunnerProps) {
+function isTeacherQuizResult(value: unknown): value is TeacherQuizResult {
+  if (typeof value !== 'object' || value === null) return false;
+  const result = value as Record<string, unknown>;
+  return Number.isInteger(result.score) && Number.isInteger(result.totalQuestions) && Number.isInteger(result.percentage);
+}
+
+export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRunnerProps) {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [teacherResult, setTeacherResult] = useState<TeacherQuizResult | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,16 +94,23 @@ export default function QuizRunner({ topic }: QuizRunnerProps) {
       setQuestions([]);
       setAnswers({});
       setCurrentIndex(0);
+      setTeacherResult(null);
 
       try {
         const jwt = await createQuizJWT();
-        const response = await fetch(`/api/quiz/questions?topicId=${encodeURIComponent(topic.id)}`, {
+        const endpoint = mode === 'teacher' ? '/api/quiz/teacher' : '/api/quiz/questions';
+        const response = await fetch(`${endpoint}?topicId=${encodeURIComponent(topic.id)}`, {
           headers: { Authorization: `Bearer ${jwt}` },
         });
 
-        if (!response.ok) throw new Error('Question request failed.');
+        const payload: unknown = await response.json().catch(() => null);
+        if (!response.ok) {
+          const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+            ? payload.error
+            : 'We could not load this quiz. Please try again.';
+          throw new Error(message);
+        }
 
-        const payload: unknown = await response.json();
         if (
           typeof payload !== 'object' ||
           payload === null ||
@@ -107,8 +129,8 @@ export default function QuizRunner({ topic }: QuizRunnerProps) {
             difficulty: question.difficulty,
           })));
         }
-      } catch {
-        if (isActive) setError('We could not load this quiz. Please try again.');
+      } catch (loadError) {
+        if (isActive) setError(loadError instanceof Error ? loadError.message : 'We could not load this quiz. Please try again.');
       } finally {
         if (isActive) setIsLoading(false);
       }
@@ -118,7 +140,7 @@ export default function QuizRunner({ topic }: QuizRunnerProps) {
     return () => {
       isActive = false;
     };
-  }, [topic.id, retryCount]);
+  }, [mode, topic.id, retryCount]);
 
   async function submitAnswers() {
     if (submissionLock.current || isSubmitting) return;
@@ -147,6 +169,31 @@ export default function QuizRunner({ topic }: QuizRunnerProps) {
         jwt = await createQuizJWT();
       } catch {
         setSubmissionError('Your session could not be verified. Please sign in again.');
+        return;
+      }
+
+      if (mode === 'teacher') {
+        const response = await fetch('/api/quiz/teacher', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${jwt}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ topicId: topic.id, answers: submittedAnswers }),
+        });
+        const payload: unknown = await response.json().catch(() => null);
+        if (!response.ok) {
+          const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+            ? payload.error
+            : 'We could not submit this Teacher Quiz. Please try again.';
+          setSubmissionError(message);
+          return;
+        }
+        if (!isTeacherQuizResult(payload)) {
+          setSubmissionError('We could not confirm your Teacher Quiz result. Please try again.');
+          return;
+        }
+        setTeacherResult(payload);
         return;
       }
 
@@ -204,8 +251,20 @@ export default function QuizRunner({ topic }: QuizRunnerProps) {
     );
   }
 
+  if (teacherResult) {
+    return (
+      <section className="glass-card p-5 sm:p-8" aria-labelledby="teacher-quiz-result-heading">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">{topic.title} · Teacher Quiz</p>
+        <h2 id="teacher-quiz-result-heading" className="mt-2 text-2xl font-bold text-slate-900">Quiz result</h2>
+        <p className="mt-5 text-4xl font-bold text-brand-700">{teacherResult.percentage}%</p>
+        <p className="mt-1 text-sm text-slate-600">{teacherResult.score} of {teacherResult.totalQuestions} correct</p>
+        {onExit && <button type="button" onClick={onExit} className="btn-secondary mt-6">Back to quiz levels</button>}
+      </section>
+    );
+  }
+
   if (questions.length === 0) {
-    return <p className="glass-card p-6 text-slate-600">No published questions are available for this topic yet.</p>;
+    return <p className="glass-card p-6 text-slate-600">{mode === 'teacher' ? 'No teacher-created questions are available for this module yet.' : 'No published questions are available for this topic yet.'}</p>;
   }
 
   const question = questions[currentIndex];
@@ -217,7 +276,7 @@ export default function QuizRunner({ topic }: QuizRunnerProps) {
     <section className="glass-card p-5 sm:p-8" aria-labelledby="question-heading">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">{topic.title} quiz</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">{topic.title}{mode === 'teacher' ? ' · Teacher Quiz' : ' quiz'}</p>
           <p className="mt-2 text-sm font-medium text-slate-500">Question {currentIndex + 1} of {questions.length}</p>
         </div>
         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{question.difficulty}</span>
@@ -256,7 +315,9 @@ export default function QuizRunner({ topic }: QuizRunnerProps) {
       {submissionError && <p className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">{submissionError}</p>}
 
       <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Link href="/games" className="btn-secondary">Exit quiz</Link>
+        {mode === 'teacher' && onExit
+          ? <button type="button" onClick={onExit} className="btn-secondary">Back to quiz levels</button>
+          : <Link href="/games" className="btn-secondary">Exit quiz</Link>}
         <button
           type="button"
           onClick={() => isLastQuestion ? void submitAnswers() : setCurrentIndex((index) => index + 1)}

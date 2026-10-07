@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
+  evaluateTeacherQuizAnswer,
   loadTeacherQuizQuestions,
   QuizSubmissionError,
   submitTeacherQuiz,
@@ -48,11 +49,21 @@ export async function POST(request: Request) {
   const jwt = getBearerToken(request);
   if (!jwt) return NextResponse.json({ error: 'Authentication is required.' }, { status: 401 });
   const body = await getBody(request);
-  if (typeof body?.topicId !== 'string' || !Array.isArray(body.answers)) {
-    return NextResponse.json({ error: 'A valid topic and answers are required.' }, { status: 400 });
+  if (typeof body?.topicId !== 'string') {
+    return NextResponse.json({ error: 'A valid topic is required.' }, { status: 400 });
   }
 
   try {
+    if (body.action === 'answer') {
+      if (typeof body.questionId !== 'string' || typeof body.selectedAnswer !== 'string') {
+        return NextResponse.json({ error: 'A question and selected answer are required.' }, { status: 400 });
+      }
+      const feedback = await evaluateTeacherQuizAnswer(jwt, body.topicId, body.questionId, body.selectedAnswer);
+      return NextResponse.json(feedback, { status: 200 });
+    }
+    if (!Array.isArray(body.answers)) {
+      return NextResponse.json({ error: 'Quiz answers must be an array.' }, { status: 400 });
+    }
     const result = await submitTeacherQuiz({
       jwt,
       topicId: body.topicId,

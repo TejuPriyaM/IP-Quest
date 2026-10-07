@@ -56,6 +56,13 @@ export type TeacherQuizResult = {
 	percentage: number;
 };
 
+export type TeacherQuizAnswerFeedback = {
+	questionId: string;
+	isCorrect: boolean;
+	correctAnswer?: string;
+	explanation: string;
+};
+
 type QuizAttempt = Models.Row & {
 	user_id: string;
 	topic_id: string;
@@ -318,6 +325,36 @@ export async function loadTeacherQuizQuestions(jwt: string, topicId: string): Pr
 	}));
 }
 
+function isTeacherAnswerCorrect(question: CanonicalQuestion, selectedAnswer: string) {
+	return selectedAnswer.trim() === question.correct_option;
+}
+
+export async function evaluateTeacherQuizAnswer(
+	jwt: string,
+	topicId: string,
+	questionId: string,
+	selectedAnswer: string,
+): Promise<TeacherQuizAnswerFeedback> {
+	if (!questionId.trim() || !selectedAnswer.trim()) {
+		throw new QuizSubmissionError('A question and selected answer are required.', 400);
+	}
+
+	const questions = await getPublishedTeacherQuizQuestions(jwt, topicId);
+	const question = questions.find((item) => item.$id === questionId);
+	if (!question) throw new QuizSubmissionError('This question is not part of the selected Teacher Quiz.', 400);
+
+	const answer = selectedAnswer.trim();
+	if (!question.options.includes(answer)) throw new QuizSubmissionError('Choose one of the listed answers.', 400);
+
+	const isCorrect = isTeacherAnswerCorrect(question, answer);
+	return {
+		questionId,
+		isCorrect,
+		...(!isCorrect ? { correctAnswer: question.correct_option } : {}),
+		explanation: question.explanation ?? '',
+	};
+}
+
 export async function submitTeacherQuiz(submission: TeacherQuizSubmission): Promise<TeacherQuizResult> {
 	assertSubmissionShape(submission);
 	const questions = await getPublishedTeacherQuizQuestions(submission.jwt, submission.topicId);
@@ -335,7 +372,7 @@ export async function submitTeacherQuiz(submission: TeacherQuizSubmission): Prom
 		if (!answer || !question.options.includes(answer)) {
 			throw new QuizSubmissionError('One or more submitted answers are invalid.', 400);
 		}
-		if (answer === question.correct_option) score += 1;
+		if (isTeacherAnswerCorrect(question, answer)) score += 1;
 	}
 	return {
 		score,

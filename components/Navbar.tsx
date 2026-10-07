@@ -9,7 +9,6 @@ const publicLinks = [
   { href: '/', label: 'Home' },
   { href: '/learn', label: 'Learn' },
   { href: '/games', label: 'Games' },
-  { href: '/progress', label: 'Progress' },
 ];
 
 export default function Navbar() {

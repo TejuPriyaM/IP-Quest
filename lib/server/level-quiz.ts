@@ -335,11 +335,24 @@ export async function getLevelQuizProgress(jwt: string, topicId: string) {
   const topic = await getVerifiedTopic(topicId);
   const attempts = await getAttemptRows(user.$id, topicId);
   const passed = passedLevels(attempts);
+  const attemptHistory = attempts
+    .filter((attempt) => attempt.status === 'completed' && Number.isInteger(attempt.level) && attempt.total_questions > 0)
+    .map((attempt) => ({
+      attemptId: attempt.$id,
+      level: attempt.level as number,
+      score: attempt.score,
+      totalQuestions: attempt.total_questions,
+      percentage: Math.round((attempt.score / attempt.total_questions) * 100),
+      passed: attempt.passed === true,
+      completedAt: attempt.completed_at,
+    }))
+    .sort((first, second) => new Date(first.completedAt).getTime() - new Date(second.completedAt).getTime());
 
   return {
     topicId,
     passPercentage: QUIZ_PASS_PERCENTAGE,
     questionsPerLevel: QUIZ_QUESTIONS_PER_LEVEL,
+    attemptHistory,
     levels: Array.from({ length: QUIZ_LEVEL_COUNT }, (_, index) => {
       const level = index + 1;
       const inProgress = attempts.find((attempt) => attempt.level === level && attempt.status === 'in_progress');

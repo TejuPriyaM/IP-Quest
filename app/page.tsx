@@ -6,6 +6,12 @@ import StudentTopicCard from '@/components/StudentTopicCard';
 import SectionHeader from '@/components/SectionHeader';
 import { listTopics, type TopicRow } from '@/lib/topics';
 
+const questHighlights = [
+  { label: 'Levels', value: '6', detail: 'From Explorer to Master' },
+  { label: 'Regions', value: '5', detail: 'Each with its own challenge' },
+  { label: 'Badges', value: '12', detail: 'Earned through gameplay' },
+];
+
 export default function HomePage() {
   const [topics, setTopics] = useState<TopicRow[]>([]);
   const [isLoadingTopics, setIsLoadingTopics] = useState(true);
@@ -25,56 +31,56 @@ export default function HomePage() {
             Learn. Create. Protect.
           </span>
           <h1 className="mt-6 max-w-xl text-4xl font-black tracking-tight text-slate-900 sm:text-5xl">
-            Explore the world of Intellectual Property with IP Quest.
+            Become an IP Guardian and protect ideas across the world of IP Quest.
           </h1>
           <p className="mt-5 max-w-xl text-lg text-slate-600">
-            Discover how copyright, patents, and trademarks protect ideas, stories, and inventions in everyday life. Learn through bite-sized lessons, quizzes, and fun progress challenges.
+            Explore the five regions of IP Quest, complete missions, and learn how patents, copyrights, trademarks, trade secrets, and plagiarism rules apply in real life.
           </p>
           <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-            <Link href="/learn" className="btn-primary">
-              Start Learning
+            <Link href="/games" className="btn-primary">
+              Start the quest
             </Link>
-            <Link href="/games" className="btn-secondary">
-              Play a Quiz
+            <Link href="/learn" className="btn-secondary">
+              Explore lessons
             </Link>
           </div>
+
           <dl className="mt-10 grid max-w-md grid-cols-3 gap-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Topics</dt>
-              <dd className="mt-2 text-2xl font-bold text-slate-900">{isLoadingTopics ? '...' : topics.length}</dd>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Quizzes</dt>
-              <dd className="mt-2 text-2xl font-bold text-slate-900">12</dd>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <dt className="text-xs uppercase tracking-wide text-slate-500">XP</dt>
-              <dd className="mt-2 text-2xl font-bold text-slate-900">420</dd>
-            </div>
+            {questHighlights.map((item) => (
+              <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <dt className="text-xs uppercase tracking-wide text-slate-500">{item.label}</dt>
+                <dd className="mt-2 text-2xl font-bold text-slate-900">{item.value}</dd>
+                <dd className="mt-1 text-[11px] text-slate-500">{item.detail}</dd>
+              </div>
+            ))}
           </dl>
         </div>
 
         <div className="glass-card overflow-hidden p-6 sm:p-8">
           <div className="rounded-2xl bg-gradient-to-br from-brand-600 to-brand-900 p-6 text-white">
-            <p className="text-sm uppercase tracking-[0.2em] text-blue-100">What is IP?</p>
-            <h2 className="mt-4 text-3xl font-bold">Ideas deserve protection.</h2>
+            <p className="text-sm uppercase tracking-[0.2em] text-blue-100">Current mission</p>
+            <h2 className="mt-4 text-3xl font-bold">Protect the invention before the thieves arrive.</h2>
             <p className="mt-3 text-sm leading-6 text-blue-50">
-              Intellectual Property is the way people recognize and protect original ideas, creative work, and inventions in school and in everyday life.
+              Students investigate what qualifies for patent protection, compare similar ideas, and decide how to protect their creations.
             </p>
           </div>
+
           <div className="mt-6 space-y-4">
-            {topics.slice(0, 5).map((topic) => (
-              <div key={topic.$id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
+            {[
+              { title: 'Patent Lab', detail: 'Invent and compare new devices', accent: 'bg-blue-50 text-blue-700' },
+              { title: 'Creator Studio', detail: 'Protect art, music, and stories', accent: 'bg-pink-50 text-pink-700' },
+              { title: 'Brand City', detail: 'Recognise logos and brands', accent: 'bg-violet-50 text-violet-700' },
+            ].map((item) => (
+              <div key={item.title} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div>
-                  <p className="font-semibold text-slate-800">{topic.title}</p>
-                  <p className="text-xs text-slate-500">{topic.difficulty}</p>
+                  <p className="font-semibold text-slate-800">{item.title}</p>
+                  <p className="text-xs text-slate-500">{item.detail}</p>
                 </div>
-                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                  Published
+                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.accent}`}>
+                  Ready
                 </span>
               </div>
             ))}
-            {!isLoadingTopics && topics.length === 0 && <p className="text-sm text-slate-600">No published topics are available yet.</p>}
           </div>
         </div>
       </section>

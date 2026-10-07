@@ -24,7 +24,12 @@ export default function Navbar() {
       .catch(() => setRole(null));
   }, [pathname]);
 
-  const links = role ? [...publicLinks, { href: getRoleBasedRoute(role), label: 'Dashboard' }] : [];
+  const progressLink = role === 'teacher' ? '/teacher/progress' : '/progress';
+  const links = role ? [
+    ...publicLinks,
+    { href: progressLink, label: 'Progress' },
+    { href: getRoleBasedRoute(role), label: 'Dashboard' },
+  ] : [];
 
   async function handleLogout() {
     setIsSigningOut(true);

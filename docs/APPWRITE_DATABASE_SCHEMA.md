@@ -48,6 +48,7 @@ Purpose: Store quiz questions.
 
 Fields:
 - topic_id: Varchar
+- lesson_id: Varchar (optional for Learn Level questions; required for lesson assessment questions, references lessons.$id)
 - question_text: Text
 - options: JSON
 - correct_option: Varchar
@@ -62,9 +63,14 @@ Purpose: Store completed quiz attempts.
 Fields:
 - user_id: Varchar
 - topic_id: Varchar
+- lesson_id: Varchar (optional; references lessons.$id for teacher lesson assessments)
+- level: Integer (optional; set for Level Quiz attempts)
 - score: Integer
 - total_questions: Integer
 - completed_at: Datetime
+- status: Varchar (optional; Level Quiz attempt status)
+- passed: Boolean (optional; Level Quiz result)
+- responses: Text (optional; saved Level Quiz answers and randomized presentation)
 
 ## Table: progress
 

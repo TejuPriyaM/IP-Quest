@@ -99,20 +99,18 @@ function isOverallResult(value: unknown): value is OverallResult {
     typeof result.totalLevels === 'number' && typeof result.score === 'number' &&
     typeof result.totalQuestions === 'number' && typeof result.wrong === 'number' &&
     typeof result.percentage === 'number' && typeof result.weakestLevel === 'number' &&
-    isOverallResultLevels(result.levelResults) && isMistakeList(result.mistakes);
-}
-
-function isOverallResultLevels(value: unknown): value is OverallResult['levelResults'] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'object' && item !== null &&
-    'level' in item && typeof item.level === 'number' &&
-    'score' in item && typeof item.score === 'number' &&
-    'totalQuestions' in item && typeof item.totalQuestions === 'number' &&
-    'percentage' in item && typeof item.percentage === 'number' &&
-    'mistakes' in item && isMistakeList(item.mistakes));
+    Array.isArray(result.levelResults) && result.levelResults.every((item) => typeof item === 'object' && item !== null &&
+      'level' in item && typeof item.level === 'number' &&
+      'score' in item && typeof item.score === 'number' &&
+      'totalQuestions' in item && typeof item.totalQuestions === 'number' &&
+      'percentage' in item && typeof item.percentage === 'number' &&
+      'mistakes' in item && isMistakeList(item.mistakes)) &&
+    isMistakeList(result.mistakes);
 }
 
 function getResultFeedbackMessage(percentage: number) {
   if (percentage === 100) return 'Perfect score. Your IP knowledge is sparkling!';
+  if (percentage >= 70) return 'Great work. You are building a strong creator toolkit.';
   if (percentage >= 40) return 'Good start. Review the lesson and try another round.';
   return 'Every question is a clue. Keep learning and try again.';
 }
@@ -153,17 +151,7 @@ function ResultsContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let isActive = true;
-
-    listTopics()
-      .then((rows) => {
-        if (isActive) setTopics(rows);
-      })
-      .catch(() => undefined);
-
-    return () => {
-      isActive = false;
-    };
+    listTopics().then(setTopics).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -174,7 +162,7 @@ function ResultsContent() {
       setError(null);
 
       if (mode === 'overall' ? !topicId : !attemptId) {
-        setError(mode === 'overall' ? 'A quiz topic is required to view the overall result.' : 'A quiz attempt ID is required to view this result.');
+        setError(mode === 'overall' ? 'A quiz topic is required to view the final result.' : 'A quiz attempt ID is required to view this result.');
         setIsLoading(false);
         return;
       }
@@ -216,25 +204,20 @@ function ResultsContent() {
         }
 
         const payload: unknown = await response.json();
-        if (mode === 'overall') {
-          if (!isOverallResult(payload) || payload.topicId !== topicId) {
-            setError('We could not verify this quiz result. Please try again.');
-            return;
-          }
-          if (isActive) setResult(payload);
-        } else if (mode === 'level') {
-          if (!isLevelResult(payload) || payload.attemptId !== attemptId) {
-            setError('We could not verify this quiz result. Please try again.');
-            return;
-          }
-          if (isActive) setResult(payload);
-        } else {
-          if (!isQuizResult(payload) || payload.attemptId !== attemptId) {
-            setError('We could not verify this quiz result. Please try again.');
-            return;
-          }
-          if (isActive) setResult(payload);
+        let validatedResult: ResultData | null = null;
+        if (mode === 'overall' && isOverallResult(payload) && payload.topicId === topicId) {
+          validatedResult = payload;
+        } else if (mode === 'level' && isLevelResult(payload) && payload.attemptId === attemptId) {
+          validatedResult = payload;
+        } else if (mode !== 'overall' && mode !== 'level' && isQuizResult(payload) && payload.attemptId === attemptId) {
+          validatedResult = payload;
         }
+        if (!validatedResult) {
+          setError('We could not verify this quiz result. Please try again.');
+          return;
+        }
+
+        if (isActive) setResult(validatedResult);
       } catch {
         if (isActive) setError('We could not load this quiz result. Check your connection and try again.');
       } finally {
@@ -248,7 +231,7 @@ function ResultsContent() {
     };
   }, [attemptId, mode, topicId]);
 
-  if (isLoading || (result !== null && !('overall' in result) && result.attemptId !== attemptId)) {
+  if (isLoading || (result !== null && 'attemptId' in result && result.attemptId !== attemptId)) {
     return <main className="section-shell py-10 sm:py-14"><p className="glass-card mx-auto max-w-2xl p-6 text-slate-600" role="status">Loading results...</p></main>;
   }
 
@@ -265,6 +248,7 @@ function ResultsContent() {
   }
 
   if ('overall' in result) {
+    const retryHref = `/games/quiz?topic=${encodeURIComponent(result.topicId)}&level=3`;
     return (
       <main className="section-shell py-10 sm:py-14">
         <section className="mx-auto max-w-3xl text-center">
@@ -273,9 +257,9 @@ function ResultsContent() {
           <p className="mt-3 text-slate-600">Levels completed: {result.completedLevels} / {result.totalLevels}</p>
           <div className="glass-card mt-7 p-6 sm:p-8">
             <p className="text-5xl font-bold text-brand-600">{result.percentage}%</p>
-            <p className="mt-2 font-semibold text-slate-600">Overall percentage</p>
+            <p className="mt-2 font-semibold text-slate-600">Final score · {result.score}/{result.totalQuestions}</p>
             <div className="mt-6 grid grid-cols-3 gap-3 border-t border-slate-100 pt-5">
-              <div><p className="text-xl font-bold text-slate-900">{result.totalQuestions}</p><p className="text-xs text-slate-500">Attempted</p></div>
+              <div><p className="text-xl font-bold text-slate-900">{result.totalQuestions}</p><p className="text-xs text-slate-500">Questions</p></div>
               <div><p className="text-xl font-bold text-emerald-700">{result.score}</p><p className="text-xs text-slate-500">Correct</p></div>
               <div><p className="text-xl font-bold text-rose-700">{result.wrong}</p><p className="text-xs text-slate-500">Wrong</p></div>
             </div>
@@ -285,13 +269,12 @@ function ResultsContent() {
             <ul className="mt-3 space-y-2">
               {result.levelResults.map((level) => <li key={level.level} className="flex justify-between gap-4 text-sm"><span>Level {level.level}</span><span className="font-semibold">{level.score}/{level.totalQuestions} ({level.percentage}%)</span></li>)}
             </ul>
-            <p className="mt-4 text-sm leading-6 text-slate-600">Weakest area: Level {result.weakestLevel}. Review the missed questions from that level before trying another topic.</p>
+            <p className="mt-4 text-sm leading-6 text-slate-600">Weakest area: Level {result.weakestLevel}. Review the missed questions from that level before trying again.</p>
           </section>
           <MistakeReview mistakes={result.mistakes} />
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link href={`/games/quiz?topic=${encodeURIComponent(result.topicId)}`} className="btn-primary">Return to levels</Link>
-            <Link href="/games" className="btn-secondary">Return to games</Link>
-            <Link href="/learn" className="btn-secondary">Return to learning</Link>
+            <Link href={retryHref} className="btn-primary">Retry Quiz</Link>
+            <Link href="/learn" className="btn-secondary">Return to Learning</Link>
           </div>
         </section>
       </main>
@@ -306,22 +289,23 @@ function ResultsContent() {
       <main className="section-shell py-10 sm:py-14">
         <section className="mx-auto max-w-3xl text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Level {result.level} complete</p>
-          <h1 className="mt-3 text-3xl font-bold text-slate-900 sm:text-4xl">{topic?.title ?? 'Quiz'} - Level {result.level}</h1>
+          <h1 className="mt-3 text-3xl font-bold text-slate-900 sm:text-4xl">{topic?.title ?? 'Quiz'} · Level {result.level}</h1>
+          <p className={`mt-3 text-xl font-bold ${result.passed ? 'text-emerald-700' : 'text-rose-700'}`}>{result.passed ? 'PASS' : 'NOT PASSED'}</p>
+          {!result.passed && <p className="mt-2 text-sm text-slate-600">Score at least {result.passPercentage}% to unlock the next level. Retry this quiz to try again.</p>}
           <div className="glass-card mt-7 p-6 sm:p-8">
-            <p className={`text-3xl font-bold ${result.passed ? 'text-emerald-700' : 'text-rose-700'}`}>{result.passed ? 'PASS ✓' : 'Try Again'}</p>
-            <p className="mt-2 text-sm text-slate-600">Passing score: {result.passPercentage}%</p>
-            <div className="mt-6 grid grid-cols-2 gap-4 border-t border-slate-100 pt-5 sm:grid-cols-4">
-              <div><p className="text-xl font-bold text-slate-900">{result.totalQuestions}</p><p className="text-xs text-slate-500">Total questions</p></div>
+            <p className="text-5xl font-bold text-brand-600">{result.percentage}%</p>
+            <p className="mt-2 font-semibold text-slate-600">Final score · {result.score}/{result.totalQuestions}</p>
+            <div className="mt-6 grid grid-cols-3 gap-3 border-t border-slate-100 pt-5">
+              <div><p className="text-xl font-bold text-slate-900">{result.totalQuestions}</p><p className="text-xs text-slate-500">Questions</p></div>
               <div><p className="text-xl font-bold text-emerald-700">{result.score}</p><p className="text-xs text-slate-500">Correct</p></div>
-              <div><p className="text-xl font-bold text-rose-700">{result.wrong}</p><p className="text-xs text-slate-500">Wrong</p></div>
               <div><p className="text-xl font-bold text-brand-700">{result.percentage}%</p><p className="text-xs text-slate-500">Percentage</p></div>
             </div>
           </div>
           <MistakeReview mistakes={result.mistakes} />
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link href={retryHref} className="btn-primary">Retry Level {result.level}</Link>
+            <Link href={retryHref} className="btn-primary">Retry Quiz</Link>
             {result.passed && result.level < 3 && <Link href={nextLevelHref} className="btn-secondary">Continue to Level {result.level + 1}</Link>}
-            <Link href={`/games/quiz?topic=${encodeURIComponent(result.topicId)}`} className="btn-secondary">Return to levels</Link>
+            <Link href="/learn" className="btn-secondary">Return to Learning</Link>
           </div>
         </section>
       </main>

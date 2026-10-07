@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Client, Query, TablesDB, type Models } from 'node-appwrite';
+import { Client, ID, Query, TablesDB, type Models } from 'node-appwrite';
 import { appwriteConfig } from '@/lib/appwrite';
 import { getLearnModuleBySlug } from '@/lib/learn';
 import { LevelQuizError, verifyQuizStudent } from '@/lib/server/level-quiz';
@@ -8,10 +8,12 @@ import { LevelQuizError, verifyQuizStudent } from '@/lib/server/level-quiz';
 const topicsTableId = 'topics';
 const lessonsTableId = 'lessons';
 const questionsTableId = 'questions';
+const quizAttemptsTableId = 'quiz_attempts';
 
 type TopicRow = Models.Row & {
   title?: string;
   slug?: string;
+  description?: string;
   is_published?: boolean;
 };
 
@@ -19,6 +21,7 @@ type LessonRow = Models.Row & {
   topic_id: string;
   title: string;
   content: string;
+  estimated_minutes?: number;
   is_published: boolean;
 };
 
@@ -188,8 +191,11 @@ export async function getLessonAssessment(jwt: string, topicId: string, lessonId
   return {
     topicId,
     topicTitle: topic.title ?? 'Learning topic',
+    topicDescription: topic.description ?? '',
     lessonId: lesson.$id,
     lessonTitle: lesson.title,
+    lessonContent: lesson.content,
+    estimatedMinutes: lesson.estimated_minutes ?? 0,
     questions: questions.map((question) => ({
       id: question.$id,
       question: question.question_text,
@@ -205,7 +211,7 @@ export async function submitLessonAssessment(
   lessonId: string,
   answers: Array<{ questionId: string; selectedOption: string }>,
 ) {
-  await verifyStudent(jwt);
+  const user = await verifyStudent(jwt);
   if (!topicId.trim() || !lessonId.trim() || !Array.isArray(answers) || answers.length === 0) {
     throw new LessonAssessmentError('A topic, lesson, and answers are required.', 400);
   }
@@ -248,7 +254,29 @@ export async function submitLessonAssessment(
     };
   });
 
+  const completedAt = new Date().toISOString();
+  let attempt: Models.Row;
+  try {
+    attempt = await getPrivilegedTables().createRow<Models.Row & { user_id: string; topic_id: string; lesson_id: string; score: number; total_questions: number; completed_at: string }>({
+      databaseId: getDatabaseId(),
+      tableId: quizAttemptsTableId,
+      rowId: ID.unique(),
+      data: {
+        user_id: user.$id,
+        topic_id: topicId,
+        lesson_id: lessonId,
+        score,
+        total_questions: questions.length,
+        completed_at: completedAt,
+      },
+    });
+  } catch {
+    throw new LessonAssessmentError('Unable to save your assessment result.', 500);
+  }
+
   return {
+    attemptId: attempt.$id,
+    completedAt,
     topicId,
     lessonId,
     lessonTitle: lesson.title,

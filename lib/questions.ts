@@ -19,6 +19,7 @@ export type Question = {
 };
 
 export type QuestionInput = Omit<Question, '$id'>;
+export type QuestionKind = 'learn-level' | 'teacher-quiz' | 'lesson-assessment';
 
 type QuestionRow = Models.Row & Question;
 
@@ -58,7 +59,7 @@ function getOperationError(error: unknown, operation: 'list' | 'get' | 'create' 
 	return new QuestionError(`Unable to ${operation} question${operation === 'list' ? 's' : ''}. Please try again.`);
 }
 
-export function validateQuestionInput(data: QuestionInput) {
+export function validateQuestionInput(data: QuestionInput, kind?: QuestionKind) {
 	if (typeof data.topic_id !== 'string' || !data.topic_id.trim()) {
 		throw new QuestionError('Question topic_id must be a non-empty string.');
 	}
@@ -68,10 +69,17 @@ export function validateQuestionInput(data: QuestionInput) {
 	}
 
 	const lessonId = typeof data.lesson_id === 'string' ? data.lesson_id.trim() : '';
+	const questionKind = kind ?? (lessonId ? 'lesson-assessment' : 'learn-level');
 	if (lessonId && data.level !== undefined && data.level !== null) {
 		throw new QuestionError('Lesson assessment questions cannot be assigned to a Learn Quiz level.');
 	}
-	if (!lessonId && (!Number.isInteger(data.level) || (data.level as number) < 1 || (data.level as number) > 3)) {
+	if (questionKind === 'teacher-quiz' && (lessonId || (data.level !== undefined && data.level !== null))) {
+		throw new QuestionError('Teacher Quiz questions cannot be assigned to a lesson or level.');
+	}
+	if (questionKind === 'lesson-assessment' && !lessonId) {
+		throw new QuestionError('Lesson assessment questions must be assigned to a lesson.');
+	}
+	if (questionKind === 'learn-level' && !lessonId && (!Number.isInteger(data.level) || (data.level as number) < 1 || (data.level as number) > 3)) {
 		throw new QuestionError('Learn Quiz questions must be assigned to Level 1, 2, or 3.');
 	}
 
@@ -221,28 +229,34 @@ export async function listPublishedQuestionsByTopic(topicId: string): Promise<Qu
 	}
 }
 
-export async function createQuestion(data: QuestionInput): Promise<Question> {
-	validateQuestionInput(data);
-	return saveQuestion('POST', { question: data }, 'create');
+export async function createQuestion(data: QuestionInput, kind?: QuestionKind): Promise<Question> {
+	validateQuestionInput(data, kind);
+	return saveQuestion('POST', { question: data, ...(kind ? { kind } : {}) }, 'create');
 }
 
-export async function updateQuestion(id: string, data: QuestionInput): Promise<Question> {
+export async function updateQuestion(id: string, data: QuestionInput, kind?: QuestionKind): Promise<Question> {
 	validateQuestionId(id);
-	validateQuestionInput(data);
-	return saveQuestion('PATCH', { questionId: id, question: data }, 'update');
+	validateQuestionInput(data, kind);
+	return saveQuestion('PATCH', { questionId: id, question: data, ...(kind ? { kind } : {}) }, 'update');
 }
 
 export async function deleteQuestion(id: string): Promise<void> {
 	validateQuestionId(id);
 
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-
-		await tablesDb.deleteRow({
-			databaseId,
-			tableId: questionsTableId,
-			rowId: id,
+		const jwt = await createCurrentUserJWT();
+		const response = await fetch('/api/teacher/questions', {
+			method: 'DELETE',
+			headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+			body: JSON.stringify({ questionId: id }),
 		});
+		const payload: unknown = await response.json().catch(() => null);
+		if (!response.ok) {
+			const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+				? payload.error
+				: 'Unable to delete question. Please try again.';
+			throw new QuestionError(message);
+		}
 	} catch (error) {
 		throw getOperationError(error, 'delete');
 	}

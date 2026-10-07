@@ -2,10 +2,12 @@ import 'server-only';
 
 import { Client, ID, Query, TablesDB, type Models } from 'node-appwrite';
 import { appwriteConfig } from '@/lib/appwrite';
+import { getLearnModuleBySlug } from '@/lib/learn';
 import { verifyQuizStudent } from '@/lib/server/level-quiz';
 
 const questionsTableId = 'questions';
 const quizAttemptsTableId = 'quiz_attempts';
+const topicsTableId = 'topics';
 
 export type QuizSubmission = {
 	jwt: string;
@@ -27,6 +29,8 @@ export type QuizSubmissionResult = {
 
 type CanonicalQuestion = Models.Row & {
 	topic_id: string;
+	lesson_id?: string | null;
+	level?: number | null;
 	options: string[];
 	correct_option: string;
 	is_published: boolean;
@@ -39,6 +43,18 @@ export type StudentQuizQuestion = Pick<
 	CanonicalQuestion,
 	'$id' | 'topic_id' | 'question_text' | 'options' | 'difficulty'
 >;
+
+export type TeacherQuizSubmission = {
+	jwt: string;
+	topicId: string;
+	answers: Array<{ questionId: string; selectedAnswer: string }>;
+};
+
+export type TeacherQuizResult = {
+	score: number;
+	totalQuestions: number;
+	percentage: number;
+};
 
 type QuizAttempt = Models.Row & {
 	user_id: string;
@@ -210,6 +226,124 @@ export async function submitQuiz(submission: QuizSubmission): Promise<QuizSubmis
 	};
 }
 
+function shuffleArray<T>(items: T[]) {
+	const reordered = [...items];
+	for (let index = reordered.length - 1; index > 0; index -= 1) {
+		const swapIndex = Math.floor(Math.random() * (index + 1));
+		[reordered[index], reordered[swapIndex]] = [reordered[swapIndex], reordered[index]];
+	}
+	return reordered;
+}
+
+async function getPublishedTeacherQuizQuestions(jwt: string, topicId: string) {
+	if (typeof jwt !== 'string' || !jwt.trim()) {
+		throw new QuizSubmissionError('Authentication is required.', 401);
+	}
+	if (typeof topicId !== 'string' || !topicId.trim()) {
+		throw new QuizSubmissionError('A valid topic is required.', 400);
+	}
+
+	try {
+		await verifyQuizStudent(jwt.trim());
+	} catch (error) {
+		const code = error instanceof Error && 'statusCode' in error ? error.statusCode : undefined;
+		if (code === 401 || code === 403) {
+			throw new QuizSubmissionError(error instanceof Error ? error.message : 'You do not have permission to take this quiz.', code);
+		}
+		throw new QuizSubmissionError('Unable to authenticate the quiz request.', 500);
+	}
+
+	const databaseId = appwriteConfig.databaseId;
+	if (!databaseId) throw new QuizSubmissionError('Appwrite database configuration is incomplete.', 500);
+	const tablesDb = new TablesDB(getQuizAppwriteClient());
+	let topic: Models.Row & { title?: string; slug?: string; is_published?: boolean };
+	try {
+		topic = await tablesDb.getRow({ databaseId, tableId: topicsTableId, rowId: topicId.trim() });
+	} catch (error) {
+		if (getErrorCode(error) === 404) throw new QuizSubmissionError('This topic is not available.', 404);
+		throw getAppwriteError(error, 'Unable to load the selected topic.');
+	}
+	if (topic.is_published !== true || !getLearnModuleBySlug(topic.slug ?? topic.title ?? '')) {
+		throw new QuizSubmissionError('This topic is not available for Teacher Quiz.', 404);
+	}
+
+	const questions: CanonicalQuestion[] = [];
+	try {
+		for (const lessonQuery of [Query.isNull('lesson_id'), Query.equal('lesson_id', '')]) {
+			let cursor: string | undefined;
+			while (true) {
+				const response = await tablesDb.listRows<CanonicalQuestion>({
+					databaseId,
+					tableId: questionsTableId,
+					queries: [
+						Query.equal('topic_id', topicId.trim()),
+						Query.equal('is_published', true),
+						Query.isNull('level'),
+						lessonQuery,
+						Query.limit(100),
+						...(cursor ? [Query.cursorAfter(cursor)] : []),
+					],
+				});
+				questions.push(...response.rows);
+				if (response.rows.length < 100) break;
+				cursor = response.rows[response.rows.length - 1].$id;
+			}
+		}
+	} catch (error) {
+		throw getAppwriteError(error, 'Unable to load Teacher Quiz questions.');
+	}
+
+	const uniqueQuestions = Array.from(new Map(questions.map((question) => [question.$id, question])).values());
+	return uniqueQuestions.filter((question) =>
+		question.topic_id === topicId.trim() &&
+		question.is_published === true &&
+		(question.lesson_id === undefined || question.lesson_id === null || question.lesson_id === '') &&
+		(question.level === undefined || question.level === null) &&
+		Array.isArray(question.options) &&
+		question.options.length === 4 &&
+		new Set(question.options.map((option) => option.trim().toLocaleLowerCase())).size === 4 &&
+		question.options.every((option) => option.trim()) &&
+		question.options.includes(question.correct_option),
+	);
+}
+
+export async function loadTeacherQuizQuestions(jwt: string, topicId: string): Promise<StudentQuizQuestion[]> {
+	const questions = await getPublishedTeacherQuizQuestions(jwt, topicId);
+	return shuffleArray(questions).map((question) => ({
+		$id: question.$id,
+		topic_id: question.topic_id,
+		question_text: question.question_text,
+		options: shuffleArray(question.options),
+		difficulty: question.difficulty,
+	}));
+}
+
+export async function submitTeacherQuiz(submission: TeacherQuizSubmission): Promise<TeacherQuizResult> {
+	assertSubmissionShape(submission);
+	const questions = await getPublishedTeacherQuizQuestions(submission.jwt, submission.topicId);
+	if (questions.length === 0) {
+		throw new QuizSubmissionError('No teacher-created questions are available for this module yet.', 404);
+	}
+	const submittedIds = new Set(submission.answers.map((answer) => answer.questionId));
+	if (submittedIds.size !== questions.length || questions.some((question) => !submittedIds.has(question.$id))) {
+		throw new QuizSubmissionError('The submitted question set does not match the current published Teacher Quiz.', 400);
+	}
+	const answersById = new Map(submission.answers.map((answer) => [answer.questionId, answer.selectedAnswer.trim()]));
+	let score = 0;
+	for (const question of questions) {
+		const answer = answersById.get(question.$id);
+		if (!answer || !question.options.includes(answer)) {
+			throw new QuizSubmissionError('One or more submitted answers are invalid.', 400);
+		}
+		if (answer === question.correct_option) score += 1;
+	}
+	return {
+		score,
+		totalQuestions: questions.length,
+		percentage: Math.round((score / questions.length) * 100),
+	};
+}
+
 export async function loadQuizQuestions(jwt: string, topicId: string): Promise<StudentQuizQuestion[]> {
 	if (typeof jwt !== 'string' || !jwt.trim()) {
 		throw new QuizSubmissionError('Authentication is required.', 401);
@@ -251,11 +385,11 @@ export async function loadQuizQuestions(jwt: string, topicId: string): Promise<S
 		throw new QuizSubmissionError('Unable to load quiz questions.', 500);
 	}
 
-	return questions.map((question) => ({
+	return shuffleArray(questions).map((question) => ({
 		$id: question.$id,
 		topic_id: question.topic_id,
 		question_text: question.question_text,
-		options: question.options,
+		options: shuffleArray(question.options),
 		difficulty: question.difficulty,
 	}));
 }

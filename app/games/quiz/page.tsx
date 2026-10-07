@@ -20,13 +20,7 @@ function QuizPageContent() {
   const [topics, setTopics] = useState<TopicRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-
-  useEffect(() => {
-    listTopics()
-      .then((rows) => setTopics(rows.filter((topic) => topic.is_published === true)))
-      .catch((error) => setLoadError(error instanceof Error ? error.message : 'Unable to load quiz topics. Please try again.'))
-      .finally(() => setIsLoading(false));
-  }, []);
+  const [teacherQuizActive, setTeacherQuizActive] = useState(false);
 
   const requestedTopicKey = requestedTopic?.trim() ?? '';
   const selectedTopic = topics.find((topic) => {
@@ -39,6 +33,18 @@ function QuizPageContent() {
   const selectedModule = selectedTopic
     ? getLearnModuleBySlug(selectedTopic.slug) ?? getLearnModuleBySlug(selectedTopic.title)
     : undefined;
+
+  useEffect(() => {
+    listTopics()
+      .then((rows) => setTopics(rows.filter((topic) => topic.is_published === true)))
+      .catch((error) => setLoadError(error instanceof Error ? error.message : 'Unable to load quiz topics. Please try again.'))
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    setTeacherQuizActive(false);
+  }, [selectedTopic?.$id]);
+
   const requestedLevel = Number(searchParams.get('level'));
   const initialLevel = Number.isInteger(requestedLevel) && requestedLevel >= 1 && requestedLevel <= 3 ? requestedLevel : null;
 
@@ -62,8 +68,20 @@ function QuizPageContent() {
 
       {selectedTopic ? (
         <div className="mt-8">
-          {selectedModule ? (
-            <LevelQuiz key={selectedTopic.$id} topic={{ id: selectedTopic.$id, title: selectedTopic.title, description: selectedTopic.description, difficulty: selectedTopic.difficulty }} initialLevel={initialLevel} />
+          {teacherQuizActive ? (
+            <QuizRunner
+              key={`${selectedTopic.$id}-teacher`}
+              topic={{ id: selectedTopic.$id, title: selectedTopic.title, description: selectedTopic.description, difficulty: selectedTopic.difficulty }}
+              mode="teacher"
+              onExit={() => setTeacherQuizActive(false)}
+            />
+          ) : selectedModule ? (
+            <LevelQuiz
+              key={selectedTopic.$id}
+              topic={{ id: selectedTopic.$id, title: selectedTopic.title, description: selectedTopic.description, difficulty: selectedTopic.difficulty }}
+              initialLevel={initialLevel}
+              onTeacherQuiz={() => setTeacherQuizActive(true)}
+            />
           ) : (
             <QuizRunner key={selectedTopic.$id} topic={{ id: selectedTopic.$id, title: selectedTopic.title, description: selectedTopic.description, difficulty: selectedTopic.difficulty }} />
           )}

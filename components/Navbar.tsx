@@ -17,8 +17,10 @@ export default function Navbar() {
   const [role, setRole] = useState<UserRole | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isLearnContext, setIsLearnContext] = useState(false);
 
   useEffect(() => {
+    setIsLearnContext(new URLSearchParams(window.location.search).get('from') === 'learn');
     getCurrentProfile()
       .then((currentProfile) => setRole(currentProfile?.role ?? null))
       .catch(() => setRole(null));
@@ -30,6 +32,13 @@ export default function Navbar() {
     { href: progressLink, label: 'Progress' },
     { href: getRoleBasedRoute(role), label: 'Dashboard' },
   ] : [];
+
+  function isActiveLink(href: string) {
+    if (href === '/') return pathname === '/';
+    if (href === '/learn' && isLearnContext) return true;
+    if (role && href === getRoleBasedRoute(role)) return pathname === href;
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
 
   async function handleLogout() {
     setIsSigningOut(true);
@@ -56,7 +65,7 @@ export default function Navbar() {
 
         <div className="hidden flex-1 items-center justify-center gap-2 md:flex">
           {links.map((link) => {
-            const isActive = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href);
+            const isActive = isActiveLink(link.href);
 
             return (
               <Link
@@ -118,7 +127,7 @@ export default function Navbar() {
         <div className="border-t border-slate-200 bg-white md:hidden">
           <div className="section-shell flex flex-col gap-2 py-4">
             {links.map((link) => {
-              const isActive = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href);
+              const isActive = isActiveLink(link.href);
 
               return (
                 <Link

@@ -145,6 +145,15 @@ async function getPublishedLesson(topicId: string, lessonId: string) {
   return { topic, lesson };
 }
 
+function shuffleArray<T>(items: T[]) {
+  const reordered = [...items];
+  for (let index = reordered.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [reordered[index], reordered[swapIndex]] = [reordered[swapIndex], reordered[index]];
+  }
+  return reordered;
+}
+
 async function getPublishedAssessmentQuestions(topicId: string, lessonId: string) {
   return (await listRows<AssessmentQuestion>(questionsTableId, [
     Query.equal('topic_id', topicId),
@@ -188,6 +197,11 @@ export async function getLessonAssessment(jwt: string, topicId: string, lessonId
   const questions = await getPublishedAssessmentQuestions(topicId, lessonId);
   if (questions.length === 0) throw new LessonAssessmentError('This lesson assessment has no published questions yet.', 404);
 
+  const randomizedQuestions = shuffleArray(questions).map((question) => ({
+    ...question,
+    options: shuffleArray(question.options),
+  }));
+
   return {
     topicId,
     topicTitle: topic.title ?? 'Learning topic',
@@ -196,7 +210,7 @@ export async function getLessonAssessment(jwt: string, topicId: string, lessonId
     lessonTitle: lesson.title,
     lessonContent: lesson.content,
     estimatedMinutes: lesson.estimated_minutes ?? 0,
-    questions: questions.map((question) => ({
+    questions: randomizedQuestions.map((question) => ({
       id: question.$id,
       question: question.question_text,
       options: question.options,

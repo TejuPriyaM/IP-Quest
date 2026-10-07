@@ -87,7 +87,7 @@ async function quizRequest<T>(url: string, body?: Record<string, unknown>): Prom
   return payload as T;
 }
 
-export default function LevelQuiz({ topic, initialLevel }: { topic: QuizTopic; initialLevel?: number | null }) {
+export default function LevelQuiz({ topic, initialLevel, onTeacherQuiz }: { topic: QuizTopic; initialLevel?: number | null; onTeacherQuiz?: () => void }) {
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
   const [completedResult, setCompletedResult] = useState<LevelCompletionResult | null>(null);
   const [activeAttempt, setActiveAttempt] = useState<StartedAttempt | null>(null);
@@ -310,7 +310,7 @@ export default function LevelQuiz({ topic, initialLevel }: { topic: QuizTopic; i
         <h2 id="level-selection-heading" className="mt-2 text-2xl font-bold text-slate-900">Choose a level</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">{progress ? `Pass each level with ${progress.passPercentage}% or more to unlock the next one.` : 'Pass each level to unlock the next one.'}</p>
         {error && <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">{error}</p>}
-        <div className="mt-6 grid gap-3 md:grid-cols-3">
+        <div className={`mt-6 grid gap-3 ${onTeacherQuiz ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
           {progress?.levels.map((level) => (
             <div key={level.level} className={`rounded-2xl border p-4 ${level.unlocked ? 'border-brand-200 bg-brand-50/50' : 'border-slate-200 bg-slate-50'}`}>
               <p className="font-bold text-slate-900">Level {level.level}</p>
@@ -320,6 +320,13 @@ export default function LevelQuiz({ topic, initialLevel }: { topic: QuizTopic; i
               </button>
             </div>
           ))}
+          {onTeacherQuiz && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+              <p className="font-bold text-slate-900">Teacher Quiz</p>
+              <p className="mt-1 text-sm text-slate-600">Questions created by your teacher.</p>
+              <button type="button" onClick={onTeacherQuiz} className="btn-primary mt-4 w-full">Start</button>
+            </div>
+          )}
         </div>
       </div>
       <Link href="/progress" className="btn-secondary inline-flex">View performance history</Link>

@@ -3,7 +3,7 @@ import 'server-only';
 import { Client, ID, TablesDB, type Models } from 'node-appwrite';
 import { appwriteConfig } from '@/lib/appwrite';
 import { getLearnModuleBySlug } from '@/lib/learn';
-import { QuestionError, validateQuestionInput, type QuestionInput } from '@/lib/questions';
+import { QuestionError, validateQuestionInput, type QuestionInput, type QuestionKind } from '@/lib/questions';
 import { LevelQuizError, verifyQuizTeacher } from '@/lib/server/level-quiz';
 
 const questionsTableId = 'questions';
@@ -38,7 +38,12 @@ function getJwtTables(jwt: string) {
   return new TablesDB(client);
 }
 
-function parseQuestionInput(value: unknown): QuestionInput {
+function getQuestionKind(question: Pick<QuestionInput, 'lesson_id' | 'level'>): QuestionKind {
+  if (question.lesson_id) return 'lesson-assessment';
+  return question.level === null || question.level === undefined ? 'teacher-quiz' : 'learn-level';
+}
+
+function parseQuestionInput(value: unknown, kind?: QuestionKind): QuestionInput {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new TeacherQuestionError('Invalid question details.', 400);
   }
@@ -68,11 +73,11 @@ function parseQuestionInput(value: unknown): QuestionInput {
     difficulty: input.difficulty,
     is_published: input.is_published,
     lesson_id: typeof input.lesson_id === 'string' ? input.lesson_id.trim() : '',
-    ...(input.level !== undefined ? { level: input.level as number | null } : {}),
+    level: input.level !== undefined ? (input.level as number | null) : null,
     ...(input.hint !== undefined ? { hint: input.hint as string | null } : {}),
   };
   try {
-    validateQuestionInput(question);
+    validateQuestionInput(question, kind ?? getQuestionKind(question));
   } catch (error) {
     if (error instanceof QuestionError) throw new TeacherQuestionError(error.message, 400);
     throw error;
@@ -83,6 +88,18 @@ function parseQuestionInput(value: unknown): QuestionInput {
 async function verifyQuestionRelationship(jwt: string, question: QuestionInput) {
   const tablesDb = getJwtTables(jwt);
   const lessonId = question.lesson_id?.trim() ?? '';
+  let topic: Models.Row & { title?: string; slug?: string; is_published?: boolean };
+  try {
+    topic = await tablesDb.getRow({ databaseId: getDatabaseId(), tableId: topicsTableId, rowId: question.topic_id });
+  } catch (error) {
+    if (getErrorCode(error) === 404) throw new TeacherQuestionError('The selected Learn topic was not found.', 404);
+    if (getErrorCode(error) === 401 || getErrorCode(error) === 403) throw new TeacherQuestionError('You do not have permission to use the selected topic.', 403);
+    throw new TeacherQuestionError('Unable to verify the selected Learn topic.', 500);
+  }
+
+  if (topic.is_published !== true || !getLearnModuleBySlug(topic.slug ?? topic.title ?? '')) {
+    throw new TeacherQuestionError('Questions must use one of the published IP learning topics.', 400);
+  }
 
   if (lessonId) {
     let lesson: Models.Row & { topic_id?: string };
@@ -96,20 +113,6 @@ async function verifyQuestionRelationship(jwt: string, question: QuestionInput) 
     if (lesson.topic_id !== question.topic_id) {
       throw new TeacherQuestionError('The selected lesson must belong to the selected topic.', 400);
     }
-    return;
-  }
-
-  let topic: Models.Row & { title?: string; slug?: string; is_published?: boolean };
-  try {
-    topic = await tablesDb.getRow({ databaseId: getDatabaseId(), tableId: topicsTableId, rowId: question.topic_id });
-  } catch (error) {
-    if (getErrorCode(error) === 404) throw new TeacherQuestionError('The selected Learn Quiz topic was not found.', 404);
-    if (getErrorCode(error) === 401 || getErrorCode(error) === 403) throw new TeacherQuestionError('You do not have permission to use the selected topic.', 403);
-    throw new TeacherQuestionError('Unable to verify the selected Learn Quiz topic.', 500);
-  }
-
-  if (topic.is_published !== true || !getLearnModuleBySlug(topic.slug ?? topic.title ?? '')) {
-    throw new TeacherQuestionError('Learn Quiz questions must use one of the published IP learning topics.', 400);
   }
 }
 
@@ -124,9 +127,12 @@ async function verifyTeacher(jwt: string) {
   }
 }
 
-export async function createTeacherQuestion(jwt: string, value: unknown) {
+export async function createTeacherQuestion(jwt: string, value: unknown, kind?: QuestionKind) {
   await verifyTeacher(jwt);
-  const question = parseQuestionInput(value);
+  const question = parseQuestionInput(value, kind);
+  if (kind && getQuestionKind(question) !== kind) {
+    throw new TeacherQuestionError('The question fields do not match the selected question type.', 400);
+  }
   await verifyQuestionRelationship(jwt, question);
   try {
     return await getJwtTables(jwt).createRow<QuestionRow>({
@@ -142,13 +148,29 @@ export async function createTeacherQuestion(jwt: string, value: unknown) {
   }
 }
 
-export async function updateTeacherQuestion(jwt: string, questionId: string, value: unknown) {
+export async function updateTeacherQuestion(jwt: string, questionId: string, value: unknown, kind?: QuestionKind) {
   await verifyTeacher(jwt);
   if (!questionId.trim()) throw new TeacherQuestionError('A valid question ID is required.', 400);
-  const question = parseQuestionInput(value);
+  const question = parseQuestionInput(value, kind);
+  const questionKind = kind ?? getQuestionKind(question);
+  let existing: Models.Row & { topic_id?: string; lesson_id?: string | null };
+  const tablesDb = getJwtTables(jwt);
+  try {
+    existing = await tablesDb.getRow({ databaseId: getDatabaseId(), tableId: questionsTableId, rowId: questionId });
+  } catch (error) {
+    if (getErrorCode(error) === 404) throw new TeacherQuestionError('The question was not found.', 404);
+    if (getErrorCode(error) === 401 || getErrorCode(error) === 403) throw new TeacherQuestionError('You do not have permission to update quiz questions.', 403);
+    throw new TeacherQuestionError('Unable to verify the existing question.', 500);
+  }
+  if (existing.topic_id !== question.topic_id || (existing.lesson_id ?? '') !== (question.lesson_id ?? '')) {
+    throw new TeacherQuestionError('An existing question cannot be reassigned to another topic or lesson.', 400);
+  }
+  if (getQuestionKind(existing) !== questionKind) {
+    throw new TeacherQuestionError('An existing question cannot be changed to another quiz or assessment type.', 400);
+  }
   await verifyQuestionRelationship(jwt, question);
   try {
-    return await getJwtTables(jwt).updateRow<QuestionRow>({
+    return await tablesDb.updateRow<QuestionRow>({
       databaseId: getDatabaseId(),
       tableId: questionsTableId,
       rowId: questionId,
@@ -159,5 +181,22 @@ export async function updateTeacherQuestion(jwt: string, questionId: string, val
     if (code === 404) throw new TeacherQuestionError('The question was not found.', 404);
     if (code === 401 || code === 403) throw new TeacherQuestionError('You do not have permission to update quiz questions.', 403);
     throw new TeacherQuestionError('Unable to update the quiz question.', 500);
+  }
+}
+
+export async function deleteTeacherQuestion(jwt: string, questionId: string) {
+  await verifyTeacher(jwt);
+  if (!questionId.trim()) throw new TeacherQuestionError('A valid question ID is required.', 400);
+  try {
+    await getJwtTables(jwt).deleteRow({
+      databaseId: getDatabaseId(),
+      tableId: questionsTableId,
+      rowId: questionId,
+    });
+  } catch (error) {
+    const code = getErrorCode(error);
+    if (code === 404) throw new TeacherQuestionError('The question was not found.', 404);
+    if (code === 401 || code === 403) throw new TeacherQuestionError('You do not have permission to delete quiz questions.', 403);
+    throw new TeacherQuestionError('Unable to delete the quiz question.', 500);
   }
 }

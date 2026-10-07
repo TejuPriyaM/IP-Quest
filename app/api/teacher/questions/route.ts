@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createTeacherQuestion, TeacherQuestionError, updateTeacherQuestion } from '@/lib/server/teacher-questions';
+import { createTeacherQuestion, deleteTeacherQuestion, TeacherQuestionError, updateTeacherQuestion } from '@/lib/server/teacher-questions';
+import type { QuestionKind } from '@/lib/questions';
 
 function getBearerToken(request: Request) {
   const authorization = request.headers.get('authorization');
@@ -24,14 +25,22 @@ async function getBody(request: Request) {
   }
 }
 
+function getQuestionKind(value: unknown): QuestionKind | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === 'learn-level' || value === 'teacher-quiz' || value === 'lesson-assessment') return value;
+  return null;
+}
+
 export async function POST(request: Request) {
   const jwt = getBearerToken(request);
   if (!jwt) return NextResponse.json({ error: 'Authentication is required.' }, { status: 401 });
   const body = await getBody(request);
   if (!body || !('question' in body)) return NextResponse.json({ error: 'Question details are required.' }, { status: 400 });
+  const kind = getQuestionKind(body.kind);
+  if (kind === null) return NextResponse.json({ error: 'A valid question type is required.' }, { status: 400 });
 
   try {
-    const question = await createTeacherQuestion(jwt, body.question);
+    const question = await createTeacherQuestion(jwt, body.question, kind);
     return NextResponse.json(question, { status: 201 });
   } catch (error) {
     return getErrorResponse(error);
@@ -45,10 +54,28 @@ export async function PATCH(request: Request) {
   if (!body || typeof body.questionId !== 'string' || !('question' in body)) {
     return NextResponse.json({ error: 'A question ID and question details are required.' }, { status: 400 });
   }
+  const kind = getQuestionKind(body.kind);
+  if (kind === null) return NextResponse.json({ error: 'A valid question type is required.' }, { status: 400 });
 
   try {
-    const question = await updateTeacherQuestion(jwt, body.questionId, body.question);
+    const question = await updateTeacherQuestion(jwt, body.questionId, body.question, kind);
     return NextResponse.json(question, { status: 200 });
+  } catch (error) {
+    return getErrorResponse(error);
+  }
+}
+
+export async function DELETE(request: Request) {
+  const jwt = getBearerToken(request);
+  if (!jwt) return NextResponse.json({ error: 'Authentication is required.' }, { status: 401 });
+  const body = await getBody(request);
+  if (!body || typeof body.questionId !== 'string') {
+    return NextResponse.json({ error: 'A question ID is required.' }, { status: 400 });
+  }
+
+  try {
+    await deleteTeacherQuestion(jwt, body.questionId);
+    return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
     return getErrorResponse(error);
   }

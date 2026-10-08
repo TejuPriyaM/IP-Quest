@@ -25,9 +25,11 @@ type QuizSubmissionResult = {
 };
 
 type TeacherQuizResult = {
+  attemptId: string;
   score: number;
   totalQuestions: number;
   percentage: number;
+  passed: boolean;
 };
 
 type TeacherAnswerFeedback = {
@@ -77,7 +79,7 @@ function isQuizSubmissionResult(value: unknown): value is QuizSubmissionResult {
 function isTeacherQuizResult(value: unknown): value is TeacherQuizResult {
   if (typeof value !== 'object' || value === null) return false;
   const result = value as Record<string, unknown>;
-  return Number.isInteger(result.score) && Number.isInteger(result.totalQuestions) && Number.isInteger(result.percentage);
+  return typeof result.attemptId === 'string' && Number.isInteger(result.score) && Number.isInteger(result.totalQuestions) && Number.isInteger(result.percentage) && typeof result.passed === 'boolean';
 }
 
 function isTeacherAnswerFeedback(value: unknown): value is TeacherAnswerFeedback {
@@ -100,6 +102,7 @@ export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRun
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionLock = useRef(false);
+  const teacherAttemptId = useRef<string | null>(null);
   const answerCheckLock = useRef(false);
   const [isCheckingAnswer, setIsCheckingAnswer] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -243,13 +246,14 @@ export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRun
       }
 
       if (mode === 'teacher') {
+        teacherAttemptId.current ??= crypto.randomUUID();
         const response = await fetch('/api/quiz/teacher', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${jwt}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ topicId: topic.id, answers: submittedAnswers }),
+          body: JSON.stringify({ topicId: topic.id, attemptId: teacherAttemptId.current, answers: submittedAnswers }),
         });
         const payload: unknown = await response.json().catch(() => null);
         if (!response.ok) {

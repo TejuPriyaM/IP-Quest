@@ -67,6 +67,7 @@ export async function POST(request: Request) {
     const result = await submitTeacherQuiz({
       jwt,
       topicId: body.topicId,
+      attemptId: typeof body.attemptId === 'string' ? body.attemptId : '',
       answers: body.answers as TeacherQuizSubmission['answers'],
     });
     return NextResponse.json(result, { status: 200 });

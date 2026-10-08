@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import { listTopics, type TopicRow } from '@/lib/topics';
 import { createQuestion, deleteQuestion, listQuestions, type Question, type QuestionInput, type QuestionKind, updateQuestion } from '@/lib/questions';
@@ -55,6 +55,8 @@ export default function TeacherQuestionsPage() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedTopicId, setSelectedTopicId] = useState('');
+  const [topicScope, setTopicScope] = useState<{ fromLearn: boolean; topicId: string }>({ fromLearn: false, topicId: '' });
+  const [topicContextError, setTopicContextError] = useState('');
   const [selectedQuestionKind, setSelectedQuestionKind] = useState<QuestionKind>('learn-level');
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -65,6 +67,7 @@ export default function TeacherQuestionsPage() {
   const [form, setForm] = useState<QuestionInput>(createForm());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const topicScopeInitialized = useRef(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -88,16 +91,36 @@ export default function TeacherQuestionsPage() {
 
   const learnTopics = useMemo(() => LEARN_MODULES.flatMap((module) => {
     const topic = getLearnTopicForModule(topics, module);
-    return topic ? [{ module, topic }] : [];
+    return topic?.is_published === true ? [{ module, topic }] : [];
   }), [topics]);
 
   useEffect(() => {
-    if (!learnTopics.some(({ topic }) => topic.$id === selectedTopicId)) {
-      const requestedTopicId = new URLSearchParams(window.location.search).get('topicId');
-      const requestedTopic = learnTopics.find(({ topic }) => topic.$id === requestedTopicId);
-      setSelectedTopicId(requestedTopic?.topic.$id ?? learnTopics[0]?.topic.$id ?? '');
+    if (topicScopeInitialized.current) return;
+    if (learnTopics.length === 0) {
+      if (isLoading || loadError) return;
+      topicScopeInitialized.current = true;
+      const fromLearn = new URLSearchParams(window.location.search).get('from') === 'learn';
+      setTopicScope({ fromLearn, topicId: '' });
+      setTopicContextError(fromLearn ? 'Unable to load topics for this module. No Learn topics are available.' : '');
+      return;
     }
-  }, [learnTopics, selectedTopicId]);
+    topicScopeInitialized.current = true;
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const fromLearn = searchParams.get('from') === 'learn';
+    const requestedTopicId = searchParams.get('topicId');
+    const requestedTopic = learnTopics.find(({ topic }) => topic.$id === requestedTopicId);
+    const topicId = requestedTopic?.topic.$id ?? (fromLearn ? '' : learnTopics[0]?.topic.$id ?? '');
+
+    setTopicScope({ fromLearn, topicId: fromLearn ? topicId : '' });
+    setTopicContextError(fromLearn && !topicId ? 'Unable to load topics for this module. Return to Learn and reopen its Quiz page.' : '');
+    setSelectedTopicId(topicId);
+    setForm((current) => ({ ...current, topic_id: topicId }));
+  }, [isLoading, learnTopics, loadError]);
+
+  const topicOptions = topicScope.fromLearn
+    ? learnTopics.filter(({ topic }) => topic.$id === topicScope.topicId)
+    : learnTopics;
 
   const visibleQuestions = useMemo(() => {
     if (!selectedTopicId) {
@@ -324,8 +347,8 @@ export default function TeacherQuestionsPage() {
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                 >
                   <option value="">Select a topic</option>
-                  {learnTopics.map(({ module, topic }) => (
-                    <option key={topic.$id} value={topic.$id}>{module.title}</option>
+                  {topicOptions.map(({ topic }) => (
+                    <option key={topic.$id} value={topic.$id}>{topic.title}</option>
                   ))}
                 </select>
               </div>
@@ -408,10 +431,17 @@ export default function TeacherQuestionsPage() {
 
                 <div>
                   <label htmlFor="question-topic" className="mb-2 block text-sm font-semibold text-slate-700">Topic</label>
-                  <select id="question-topic" required disabled value={form.topic_id} className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100">
+                  <select id="question-topic" required disabled={topicOptions.length === 0} value={form.topic_id} onChange={(event) => {
+                    const topicId = event.target.value;
+                    setSelectedTopicId(topicId);
+                    setSearchTerm('');
+                    setEditingQuestion(null);
+                    setForm((current) => ({ ...current, topic_id: topicId, lesson_id: '' }));
+                  }} className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100">
                     <option value="">Select a topic</option>
-                    {learnTopics.map(({ module, topic }) => <option key={topic.$id} value={topic.$id}>{module.title}</option>)}
+                    {topicOptions.map(({ topic }) => <option key={topic.$id} value={topic.$id}>{topic.title}</option>)}
                   </select>
+                  {topicContextError && <p className="mt-2 text-sm text-red-700" role="alert">{topicContextError}</p>}
                 </div>
 
                 {selectedQuestionKind === 'lesson-assessment' && (

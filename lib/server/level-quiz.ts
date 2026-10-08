@@ -66,6 +66,7 @@ type PerformanceHistoryEntry = {
   completedAt: string;
 } & (
   | { kind: 'level'; level: number; passed: boolean }
+  | { kind: 'teacher'; passed: boolean }
   | { kind: 'assessment'; lessonId: string; lessonTitle: string }
 );
 
@@ -473,12 +474,15 @@ export async function getStudentPerformanceHistory(jwt: string) {
       }
       if (Number.isInteger(attempt.level)) {
         entries.push({ ...common, kind: 'level', level: attempt.level as number, passed: attempt.passed === true });
+      } else if (attempt.status === 'completed') {
+        entries.push({ ...common, kind: 'teacher', passed: attempt.passed === true });
       }
       return entries;
     }, []).sort((first, second) => new Date(first.completedAt).getTime() - new Date(second.completedAt).getTime());
 
   return {
     levelAttempts: history.filter((attempt) => attempt.kind === 'level'),
+    teacherQuizAttempts: history.filter((attempt) => attempt.kind === 'teacher'),
     lessonAssessments: history.filter((attempt) => attempt.kind === 'assessment'),
   };
 }

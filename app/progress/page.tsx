@@ -30,8 +30,20 @@ type LessonAssessmentAttempt = {
   completedAt: string;
 };
 
+type TeacherQuizAttempt = {
+  attemptId: string;
+  topicId: string;
+  topicTitle: string;
+  score: number;
+  totalQuestions: number;
+  percentage: number;
+  passed: boolean;
+  completedAt: string;
+};
+
 type PerformanceHistory = {
   levelAttempts: LevelQuizAttempt[];
+  teacherQuizAttempts: TeacherQuizAttempt[];
   lessonAssessments: LessonAssessmentAttempt[];
 };
 
@@ -135,6 +147,7 @@ function ScoreTrendChart<T extends { attemptId: string; percentage: number; comp
       </div>
       {showLevelLegend && <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-600">
         {[1, 2, 3].map((level) => <span key={level} className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: chartColors[level - 1] }} />Level {level}</span>)}
+        <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-slate-500" />Teacher Quiz</span>
       </div>}
     </section>
   );
@@ -166,7 +179,7 @@ export default function ProgressPage() {
         if (isActive) {
           const nextHistory = payload as PerformanceHistory;
           setHistory(nextHistory);
-          const latestAttempt = [...nextHistory.levelAttempts, ...nextHistory.lessonAssessments]
+          const latestAttempt = [...nextHistory.levelAttempts, ...nextHistory.teacherQuizAttempts, ...nextHistory.lessonAssessments]
             .sort((first, second) => new Date(second.completedAt).getTime() - new Date(first.completedAt).getTime())[0];
           setSelectedAttemptId(latestAttempt?.attemptId ?? '');
         }
@@ -182,17 +195,22 @@ export default function ProgressPage() {
   }, []);
 
   const levelAttempts = history?.levelAttempts ?? [];
+  const teacherQuizAttempts = history?.teacherQuizAttempts ?? [];
   const assessmentAttempts = history?.lessonAssessments ?? [];
-  const levelCorrect = levelAttempts.reduce((total, attempt) => total + attempt.score, 0);
-  const levelQuestions = levelAttempts.reduce((total, attempt) => total + attempt.totalQuestions, 0);
+  const quizAttempts = [...levelAttempts, ...teacherQuizAttempts].sort((first, second) => new Date(first.completedAt).getTime() - new Date(second.completedAt).getTime());
+  const quizCorrect = quizAttempts.reduce((total, attempt) => total + attempt.score, 0);
+  const quizQuestions = quizAttempts.reduce((total, attempt) => total + attempt.totalQuestions, 0);
   const assessmentCorrect = assessmentAttempts.reduce((total, attempt) => total + attempt.score, 0);
   const assessmentQuestions = assessmentAttempts.reduce((total, attempt) => total + attempt.totalQuestions, 0);
-  const topicIds = Array.from(new Set(levelAttempts.map((attempt) => attempt.topicId)));
+  const topicIds = Array.from(new Set(quizAttempts.map((attempt) => attempt.topicId)));
+  const levelTopicIds = Array.from(new Set(levelAttempts.map((attempt) => attempt.topicId)));
   const lessonIds = Array.from(new Set(assessmentAttempts.map((attempt) => attempt.lessonId)));
   const selectedLevelAttempt = levelAttempts.find((attempt) => attempt.attemptId === selectedAttemptId);
+  const selectedTeacherAttempt = teacherQuizAttempts.find((attempt) => attempt.attemptId === selectedAttemptId);
   const selectedAssessmentAttempt = assessmentAttempts.find((attempt) => attempt.attemptId === selectedAttemptId);
   const allAttempts = [
     ...levelAttempts.map((attempt) => ({ ...attempt, attemptType: 'Level Quiz', label: `${attempt.topicTitle} · Level ${attempt.level}` })),
+    ...teacherQuizAttempts.map((attempt) => ({ ...attempt, attemptType: 'Teacher Quiz', label: `${attempt.topicTitle} · Teacher Quiz` })),
     ...assessmentAttempts.map((attempt) => ({ ...attempt, attemptType: 'Lesson Assessment', label: `${attempt.topicTitle} · ${attempt.lessonTitle}` })),
   ].sort((first, second) => new Date(second.completedAt).getTime() - new Date(first.completedAt).getTime());
   const pageSize = 10;
@@ -208,29 +226,29 @@ export default function ProgressPage() {
         {isLoading ? <p className="glass-card mt-8 p-6 text-sm text-slate-600" role="status">Loading your results...</p> : !history ? <p className="glass-card mt-8 p-6 text-sm text-slate-600">Performance history is unavailable.</p> : (
           <div className="mt-8 space-y-6">
             <section aria-labelledby="quiz-history-heading">
-              <div className="mb-4"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600">Level Quiz</p><h2 id="quiz-history-heading" className="mt-1 text-2xl font-bold text-slate-900">Quiz performance</h2></div>
+              <div className="mb-4"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600">Quizzes</p><h2 id="quiz-history-heading" className="mt-1 text-2xl font-bold text-slate-900">Quiz performance</h2></div>
               <div className="grid gap-4 md:grid-cols-3">
-                <article className="glass-card p-5"><p className="text-sm text-slate-500">Completed attempts</p><p className="mt-2 text-3xl font-bold text-slate-900">{levelAttempts.length}</p></article>
+                <article className="glass-card p-5"><p className="text-sm text-slate-500">Completed attempts</p><p className="mt-2 text-3xl font-bold text-slate-900">{quizAttempts.length}</p></article>
                 <article className="glass-card p-5"><p className="text-sm text-slate-500">Topics attempted</p><p className="mt-2 text-3xl font-bold text-slate-900">{topicIds.length}</p></article>
-                <article className="glass-card p-5"><p className="text-sm text-slate-500">Overall accuracy</p><p className="mt-2 text-3xl font-bold text-brand-700">{levelQuestions > 0 ? `${Math.round((levelCorrect / levelQuestions) * 100)}%` : '--'}</p></article>
+                <article className="glass-card p-5"><p className="text-sm text-slate-500">Overall accuracy</p><p className="mt-2 text-3xl font-bold text-brand-700">{quizQuestions > 0 ? `${Math.round((quizCorrect / quizQuestions) * 100)}%` : '--'}</p></article>
               </div>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <AccuracyChart title="Correct answers" correct={levelCorrect} total={levelQuestions} color="#2563eb" />
-                <ScoreTrendChart title="Level Quiz scores over time" attempts={levelAttempts} getColor={(attempt) => chartColors[attempt.level - 1] ?? '#64748b'} selectedAttemptId={selectedAttemptId} onSelect={(attempt) => setSelectedAttemptId(attempt.attemptId)} />
+                <AccuracyChart title="Correct answers" correct={quizCorrect} total={quizQuestions} color="#2563eb" />
+                <ScoreTrendChart title="Quiz scores over time" attempts={quizAttempts} getColor={(attempt) => 'level' in attempt && typeof attempt.level === 'number' ? chartColors[attempt.level - 1] ?? '#64748b' : '#64748b'} selectedAttemptId={selectedAttemptId} onSelect={(attempt) => setSelectedAttemptId(attempt.attemptId)} />
               </div>
               <section className="glass-card mt-4 p-5 sm:p-6" aria-live="polite" aria-labelledby="selected-attempt-heading">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600">Selected result</p>
-                <h3 id="selected-attempt-heading" className="mt-1 text-lg font-bold text-slate-900">{selectedLevelAttempt ? `${selectedLevelAttempt.topicTitle} · Level ${selectedLevelAttempt.level}` : selectedAssessmentAttempt ? `${selectedAssessmentAttempt.topicTitle} · ${selectedAssessmentAttempt.lessonTitle}` : 'No completed attempts yet'}</h3>
-                {(selectedLevelAttempt || selectedAssessmentAttempt) && <div className="mt-4 grid gap-3 sm:grid-cols-4">
-                  <div><p className="text-2xl font-bold text-brand-700">{(selectedLevelAttempt ?? selectedAssessmentAttempt)?.percentage}%</p><p className="text-xs text-slate-500">Score</p></div>
-                  <div><p className="text-lg font-bold text-slate-900">{(selectedLevelAttempt ?? selectedAssessmentAttempt)?.score}/{(selectedLevelAttempt ?? selectedAssessmentAttempt)?.totalQuestions}</p><p className="text-xs text-slate-500">Correct answers</p></div>
-                  <div><p className="text-sm font-semibold text-slate-900">{formatDate((selectedLevelAttempt ?? selectedAssessmentAttempt)!.completedAt)}</p><p className="text-xs text-slate-500">Completed</p></div>
-                  <div><p className={`text-sm font-bold ${selectedLevelAttempt ? selectedLevelAttempt.passed ? 'text-emerald-700' : 'text-rose-700' : 'text-emerald-700'}`}>{selectedLevelAttempt ? selectedLevelAttempt.passed ? 'Passed' : 'Not passed' : 'Completed'}</p><p className="text-xs text-slate-500">Result</p></div>
+                <h3 id="selected-attempt-heading" className="mt-1 text-lg font-bold text-slate-900">{selectedLevelAttempt ? `${selectedLevelAttempt.topicTitle} · Level ${selectedLevelAttempt.level}` : selectedTeacherAttempt ? `${selectedTeacherAttempt.topicTitle} · Teacher Quiz` : selectedAssessmentAttempt ? `${selectedAssessmentAttempt.topicTitle} · ${selectedAssessmentAttempt.lessonTitle}` : 'No completed attempts yet'}</h3>
+                {(selectedLevelAttempt || selectedTeacherAttempt || selectedAssessmentAttempt) && <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                  <div><p className="text-2xl font-bold text-brand-700">{(selectedLevelAttempt ?? selectedTeacherAttempt ?? selectedAssessmentAttempt)?.percentage}%</p><p className="text-xs text-slate-500">Score</p></div>
+                  <div><p className="text-lg font-bold text-slate-900">{(selectedLevelAttempt ?? selectedTeacherAttempt ?? selectedAssessmentAttempt)?.score}/{(selectedLevelAttempt ?? selectedTeacherAttempt ?? selectedAssessmentAttempt)?.totalQuestions}</p><p className="text-xs text-slate-500">Correct answers</p></div>
+                  <div><p className="text-sm font-semibold text-slate-900">{formatDate((selectedLevelAttempt ?? selectedTeacherAttempt ?? selectedAssessmentAttempt)!.completedAt)}</p><p className="text-xs text-slate-500">Completed</p></div>
+                  <div><p className={`text-sm font-bold ${(selectedLevelAttempt ?? selectedTeacherAttempt)?.passed === false ? 'text-rose-700' : 'text-emerald-700'}`}>{(selectedLevelAttempt ?? selectedTeacherAttempt) ? (selectedLevelAttempt ?? selectedTeacherAttempt)?.passed ? 'Passed' : 'Not passed' : 'Completed'}</p><p className="text-xs text-slate-500">Result</p></div>
                 </div>}
               </section>
               <div className="glass-card mt-4 overflow-hidden p-5 sm:p-6">
                 <h3 className="font-bold text-slate-900">Best score by topic and level</h3>
-                {topicIds.length === 0 ? <p className="mt-3 text-sm text-slate-600">Your completed Level Quiz results will appear here.</p> : (
+                {levelTopicIds.length === 0 ? <p className="mt-3 text-sm text-slate-600">Your completed Level Quiz results will appear here.</p> : (
                   <div className="mt-4 overflow-x-auto">
                     <table className="w-full min-w-[700px] text-left text-sm">
                       <thead>
@@ -241,7 +259,7 @@ export default function ProgressPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {topicIds.map((topicId) => {
+                        {levelTopicIds.map((topicId) => {
                           const topicAttempts = levelAttempts.filter((attempt) => attempt.topicId === topicId);
                           const bestAttempts = [1, 2, 3].map((level) => topicAttempts
                             .filter((attempt) => attempt.level === level)
@@ -302,7 +320,7 @@ export default function ProgressPage() {
                           <td className="py-3 pr-4 text-slate-600">{attempt.attemptType}</td>
                           <td className="py-3 pr-4 font-medium text-slate-900">{attempt.label}</td>
                           <td className="py-3 pr-4 font-semibold text-slate-900">{attempt.score}/{attempt.totalQuestions} ({attempt.percentage}%)</td>
-                          <td className="py-3"><button type="button" aria-expanded={selectedAttemptId === attempt.attemptId} onClick={() => setSelectedAttemptId((current) => current === attempt.attemptId ? '' : attempt.attemptId)} className="font-semibold text-brand-700 underline-offset-2 hover:underline">{attempt.attemptType === 'Level Quiz' && 'passed' in attempt ? attempt.passed ? 'Passed · View' : 'Not passed · View' : 'View result'}</button></td>
+                          <td className="py-3"><button type="button" aria-expanded={selectedAttemptId === attempt.attemptId} onClick={() => setSelectedAttemptId((current) => current === attempt.attemptId ? '' : attempt.attemptId)} className="font-semibold text-brand-700 underline-offset-2 hover:underline">{('passed' in attempt && (attempt.attemptType === 'Level Quiz' || attempt.attemptType === 'Teacher Quiz')) ? attempt.passed ? 'Passed · View' : 'Not passed · View' : 'View result'}</button></td>
                         </tr>
                         {selectedAttemptId === attempt.attemptId && (
                           <tr className="border-b border-slate-200 bg-slate-50">
@@ -311,7 +329,7 @@ export default function ProgressPage() {
                                 <div><p className="text-xs font-semibold uppercase text-slate-500">Attempt</p><p className="mt-1 font-semibold text-slate-900">{attempt.label}</p></div>
                                 <div><p className="text-xs font-semibold uppercase text-slate-500">Score</p><p className="mt-1 font-semibold text-slate-900">{attempt.score} of {attempt.totalQuestions} ({attempt.percentage}%)</p></div>
                                 <div><p className="text-xs font-semibold uppercase text-slate-500">Completed</p><p className="mt-1 font-semibold text-slate-900">{formatDate(attempt.completedAt)}</p></div>
-                                <div><p className="text-xs font-semibold uppercase text-slate-500">Result</p><p className={`mt-1 font-semibold ${attempt.attemptType === 'Level Quiz' && 'passed' in attempt ? attempt.passed ? 'text-emerald-700' : 'text-rose-700' : 'text-emerald-700'}`}>{attempt.attemptType === 'Level Quiz' && 'passed' in attempt ? attempt.passed ? 'Passed' : 'Not passed' : 'Completed'}</p></div>
+                                <div><p className="text-xs font-semibold uppercase text-slate-500">Result</p><p className={`mt-1 font-semibold ${('passed' in attempt && (attempt.attemptType === 'Level Quiz' || attempt.attemptType === 'Teacher Quiz')) ? attempt.passed ? 'text-emerald-700' : 'text-rose-700' : 'text-emerald-700'}`}>{('passed' in attempt && (attempt.attemptType === 'Level Quiz' || attempt.attemptType === 'Teacher Quiz')) ? attempt.passed ? 'Passed' : 'Not passed' : 'Completed'}</p></div>
                               </div>
                             </td>
                           </tr>

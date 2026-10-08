@@ -4,6 +4,7 @@ import { Client, ID, Query, TablesDB, type Models } from 'node-appwrite';
 import { appwriteConfig } from '@/lib/appwrite';
 import { getLearnModuleBySlug } from '@/lib/learn';
 import { verifyQuizStudent } from '@/lib/server/level-quiz';
+import { QUIZ_PASS_PERCENTAGE } from '@/lib/server/quiz-config';
 
 const questionsTableId = 'questions';
 const quizAttemptsTableId = 'quiz_attempts';
@@ -47,13 +48,16 @@ export type StudentQuizQuestion = Pick<
 export type TeacherQuizSubmission = {
 	jwt: string;
 	topicId: string;
+	attemptId: string;
 	answers: Array<{ questionId: string; selectedAnswer: string }>;
 };
 
 export type TeacherQuizResult = {
+	attemptId: string;
 	score: number;
 	totalQuestions: number;
 	percentage: number;
+	passed: boolean;
 };
 
 export type TeacherQuizAnswerFeedback = {
@@ -69,6 +73,10 @@ type QuizAttempt = Models.Row & {
 	score: number;
 	total_questions: number;
 	completed_at: string;
+	level?: number | null;
+	lesson_id?: string | null;
+	status?: string | null;
+	passed?: boolean | null;
 };
 
 export class QuizSubmissionError extends Error {
@@ -357,6 +365,9 @@ export async function evaluateTeacherQuizAnswer(
 
 export async function submitTeacherQuiz(submission: TeacherQuizSubmission): Promise<TeacherQuizResult> {
 	assertSubmissionShape(submission);
+	if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(submission.attemptId)) {
+		throw new QuizSubmissionError('A valid quiz attempt is required.', 400);
+	}
 	const questions = await getPublishedTeacherQuizQuestions(submission.jwt, submission.topicId);
 	if (questions.length === 0) {
 		throw new QuizSubmissionError('No teacher-created questions are available for this module yet.', 404);
@@ -374,10 +385,57 @@ export async function submitTeacherQuiz(submission: TeacherQuizSubmission): Prom
 		}
 		if (isTeacherAnswerCorrect(question, answer)) score += 1;
 	}
+	const percentage = Math.round((score / questions.length) * 100);
+	const passed = percentage >= QUIZ_PASS_PERCENTAGE;
+	let user: Models.User<Models.Preferences>;
+	try {
+		user = await verifyQuizStudent(submission.jwt.trim());
+	} catch (error) {
+		const code = error instanceof Error && 'statusCode' in error ? error.statusCode : undefined;
+		if (code === 401 || code === 403) {
+			throw new QuizSubmissionError(error instanceof Error ? error.message : 'You do not have permission to submit this quiz.', code);
+		}
+		throw new QuizSubmissionError('Unable to authenticate the quiz submission.', 500);
+	}
+
+	const databaseId = appwriteConfig.databaseId;
+	if (!databaseId) throw new QuizSubmissionError('Appwrite database configuration is incomplete.', 500);
+	const tablesDb = new TablesDB(getQuizAppwriteClient());
+	const topicId = submission.topicId.trim();
+	let attempt: QuizAttempt;
+	try {
+		attempt = await tablesDb.createRow<QuizAttempt>({
+			databaseId,
+			tableId: quizAttemptsTableId,
+			rowId: submission.attemptId,
+			data: {
+				user_id: user.$id,
+				topic_id: topicId,
+				score,
+				total_questions: questions.length,
+				completed_at: new Date().toISOString(),
+				status: 'completed',
+				passed,
+			},
+		});
+	} catch (error) {
+		if (getErrorCode(error) !== 409) throw getAppwriteError(error, 'Unable to save your Teacher Quiz attempt.');
+		try {
+			attempt = await tablesDb.getRow<QuizAttempt>({ databaseId, tableId: quizAttemptsTableId, rowId: submission.attemptId });
+		} catch {
+			throw new QuizSubmissionError('Unable to confirm your Teacher Quiz attempt.', 500);
+		}
+		if (attempt.user_id !== user.$id || attempt.topic_id !== topicId || attempt.status !== 'completed' || Number.isInteger(attempt.level) || attempt.lesson_id) {
+			throw new QuizSubmissionError('This quiz attempt is not available.', 400);
+		}
+	}
+
 	return {
+		attemptId: attempt.$id,
 		score,
-		totalQuestions: questions.length,
-		percentage: Math.round((score / questions.length) * 100),
+		totalQuestions: attempt.total_questions,
+		percentage: Math.round((attempt.score / attempt.total_questions) * 100),
+		passed: attempt.passed === true,
 	};
 }
 

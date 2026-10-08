@@ -1,4 +1,5 @@
 import { ID, TablesDB, type Models } from 'appwrite';
+import { createQuizJWT } from '@/lib/auth';
 import { getAppwriteClient, getAppwriteDatabaseId } from '@/lib/appwrite';
 
 export const topicsTableId = 'topics';
@@ -56,6 +57,28 @@ export async function listTopics(): Promise<TopicRow[]> {
 		const response = await tablesDb.listRows<TopicRow>({ databaseId, tableId: topicsTableId });
 
 		return response.rows;
+	} catch (error) {
+		throw getOperationError(error, 'load');
+	}
+}
+
+export async function listPublishedLearnTopics(): Promise<TopicRow[]> {
+	try {
+		const jwt = await createQuizJWT();
+		const response = await fetch('/api/learn/topics', {
+			headers: { Authorization: `Bearer ${jwt}` },
+		});
+		const payload: unknown = await response.json().catch(() => null);
+		if (!response.ok) {
+			const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+				? payload.error
+				: 'Unable to load published learning topics.';
+			throw new TopicError(message);
+		}
+		if (typeof payload !== 'object' || payload === null || !('topics' in payload) || !Array.isArray(payload.topics)) {
+			throw new TopicError('The published learning topics response was invalid.');
+		}
+		return payload.topics as TopicRow[];
 	} catch (error) {
 		throw getOperationError(error, 'load');
 	}

@@ -27,7 +27,7 @@ async function getBody(request: Request) {
 
 function getQuestionKind(value: unknown): QuestionKind | null | undefined {
   if (value === undefined) return undefined;
-  if (value === 'learn-level' || value === 'teacher-quiz' || value === 'lesson-assessment') return value;
+  if (value === 'learn-level' || value === 'teacher-quiz' || value === 'lesson-assessment' || value === 'teacher-assessment') return value;
   return null;
 }
 

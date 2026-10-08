@@ -286,8 +286,8 @@ async function getVerifiedTopic(topicId: string, jwt?: string) {
   return topic;
 }
 
-async function getAttempt(attemptId: string, jwt?: string) {
-  const tablesDb = jwt ? getJwtTables(jwt) : getPrivilegedTables();
+async function getAttempt(attemptId: string) {
+  const tablesDb = getPrivilegedTables();
   try {
     return await tablesDb.getRow<QuizAttempt>({
       databaseId: getDatabaseId(),
@@ -371,8 +371,8 @@ function createQuestionPresentation(questions: QuestionRow[]) {
   };
 }
 
-async function getAttemptRows(userId: string, topicId?: string, jwt?: string) {
-  const tablesDb = jwt ? getJwtTables(jwt) : getPrivilegedTables();
+async function getAttemptRows(userId: string, topicId?: string) {
+  const tablesDb = getPrivilegedTables();
   const databaseId = getDatabaseId();
   const rows: QuizAttempt[] = [];
   let cursor: string | undefined;
@@ -407,7 +407,7 @@ function passedLevels(attempts: QuizAttempt[]) {
 export async function getLevelQuizProgress(jwt: string, topicId: string) {
   const user = await verifyQuizStudent(jwt);
   const topic = await getVerifiedTopic(topicId, jwt);
-  const attempts = await getAttemptRows(user.$id, topicId, jwt);
+  const attempts = await getAttemptRows(user.$id, topicId);
   const passed = passedLevels(attempts);
 
   return {
@@ -430,7 +430,7 @@ export async function getLevelQuizProgress(jwt: string, topicId: string) {
 
 export async function getStudentPerformanceHistory(jwt: string) {
   const user = await verifyQuizStudent(jwt);
-  const attempts = (await getAttemptRows(user.$id, undefined, jwt)).filter((attempt) =>
+  const attempts = (await getAttemptRows(user.$id)).filter((attempt) =>
     attempt.total_questions > 0 && Number.isInteger(attempt.score) && typeof attempt.completed_at === 'string',
   );
   const topicIds = Array.from(new Set(attempts.map((attempt) => attempt.topic_id)));
@@ -487,7 +487,7 @@ export async function startOrResumeLevel(jwt: string, topicId: string, level: nu
   const user = await verifyQuizStudent(jwt);
   assertLevel(level);
   const topic = await getVerifiedTopic(topicId, jwt);
-  const attempts = await getAttemptRows(user.$id, topicId, jwt);
+  const attempts = await getAttemptRows(user.$id, topicId);
   if (level > 1 && !passedLevels(attempts).has(level - 1)) {
     throw new LevelQuizError('Pass the previous level before starting this one.', 403);
   }
@@ -598,7 +598,7 @@ export async function submitLevelAnswer(jwt: string, attemptId: string, question
     throw new LevelQuizError('An attempt, question, and answer are required.', 400);
   }
 
-  const attempt = await getAttempt(attemptId.trim(), jwt);
+  const attempt = await getAttempt(attemptId.trim());
   const tablesDb = getJwtTables(jwt);
   assertAttemptOwner(attempt, user.$id);
   if (attempt.status !== 'in_progress' || !Number.isInteger(attempt.level)) {
@@ -666,7 +666,7 @@ export async function completeLevelAttempt(jwt: string, attemptId: string) {
   const user = await verifyQuizStudent(jwt);
   if (!attemptId.trim()) throw new LevelQuizError('A valid quiz attempt is required.', 400);
 
-  const attempt = await getAttempt(attemptId.trim(), jwt);
+  const attempt = await getAttempt(attemptId.trim());
   assertAttemptOwner(attempt, user.$id);
   if (attempt.status !== 'in_progress' || !Number.isInteger(attempt.level)) {
     throw new LevelQuizError('This attempt is already complete or invalid.', 409);
@@ -763,7 +763,7 @@ function getMistakes(responses: AttemptResponses | null) {
 
 export async function getLevelAttemptResult(jwt: string, attemptId: string) {
   const user = await verifyQuizStudent(jwt);
-  const attempt = await getAttempt(attemptId, jwt);
+  const attempt = await getAttempt(attemptId);
   assertAttemptOwner(attempt, user.$id);
   if (attempt.status !== 'completed' || !Number.isInteger(attempt.level) || typeof attempt.passed !== 'boolean') {
     throw new LevelQuizError('This level result is not complete.', 409);

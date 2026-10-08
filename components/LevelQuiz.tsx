@@ -138,11 +138,8 @@ export default function LevelQuiz({ topic, initialLevel, onTeacherQuiz }: { topi
         if (!isActive) return;
         const nextProgress = payload as ProgressPayload;
         setProgress(nextProgress);
-        const inProgress = nextProgress.levels.find((level) => level.level === initialLevel && level.inProgressAttemptId)
-          ?? (initialLevel ? undefined : nextProgress.levels.find((level) => level.inProgressAttemptId));
-        const startLevelNumber = initialLevel ?? inProgress?.level;
-        if (startLevelNumber) {
-          await startLevel(startLevelNumber);
+        if (initialLevel !== null && initialLevel !== undefined) {
+          await startLevel(initialLevel);
         }
       } catch (loadError) {
         if (isActive) setError(loadError instanceof Error ? loadError.message : 'Unable to load quiz progress.');

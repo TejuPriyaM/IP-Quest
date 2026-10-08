@@ -30,6 +30,13 @@ type TeacherQuizResult = {
   percentage: number;
 };
 
+type TeacherAnswerFeedback = {
+  questionId: string;
+  isCorrect: boolean;
+  correctAnswer?: string;
+  explanation: string;
+};
+
 type QuizTopic = {
   id: string;
   title: string;
@@ -73,9 +80,19 @@ function isTeacherQuizResult(value: unknown): value is TeacherQuizResult {
   return Number.isInteger(result.score) && Number.isInteger(result.totalQuestions) && Number.isInteger(result.percentage);
 }
 
+function isTeacherAnswerFeedback(value: unknown): value is TeacherAnswerFeedback {
+  if (typeof value !== 'object' || value === null) return false;
+  const feedback = value as Record<string, unknown>;
+  return typeof feedback.questionId === 'string' &&
+    typeof feedback.isCorrect === 'boolean' &&
+    typeof feedback.explanation === 'string' &&
+    (feedback.correctAnswer === undefined || typeof feedback.correctAnswer === 'string');
+}
+
 export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRunnerProps) {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [teacherFeedback, setTeacherFeedback] = useState<Record<string, TeacherAnswerFeedback>>({});
   const [teacherResult, setTeacherResult] = useState<TeacherQuizResult | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -83,6 +100,8 @@ export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRun
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionLock = useRef(false);
+  const answerCheckLock = useRef(false);
+  const [isCheckingAnswer, setIsCheckingAnswer] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
@@ -93,8 +112,10 @@ export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRun
       setError(null);
       setQuestions([]);
       setAnswers({});
+      setTeacherFeedback({});
       setCurrentIndex(0);
       setTeacherResult(null);
+      answerCheckLock.current = false;
 
       try {
         const jwt = await createQuizJWT();
@@ -142,6 +163,51 @@ export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRun
     };
   }, [mode, topic.id, retryCount]);
 
+  async function selectAnswer(question: QuizQuestion, selectedAnswer: string) {
+    if (mode !== 'teacher') {
+      setAnswers((currentAnswers) => ({ ...currentAnswers, [question.id]: selectedAnswer }));
+      return;
+    }
+    if (answerCheckLock.current || teacherFeedback[question.id] || answers[question.id]) return;
+
+    answerCheckLock.current = true;
+    setIsCheckingAnswer(true);
+    setSubmissionError(null);
+    setAnswers((currentAnswers) => ({ ...currentAnswers, [question.id]: selectedAnswer }));
+    try {
+      const jwt = await createQuizJWT();
+      const response = await fetch('/api/quiz/teacher', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'answer', topicId: topic.id, questionId: question.id, selectedAnswer }),
+      });
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+          ? payload.error
+          : 'We could not check this answer. Please try again.';
+        throw new Error(message);
+      }
+      if (!isTeacherAnswerFeedback(payload) || payload.questionId !== question.id) {
+        throw new Error('We could not confirm this answer. Please try again.');
+      }
+      setTeacherFeedback((currentFeedback) => ({ ...currentFeedback, [question.id]: payload }));
+    } catch (answerError) {
+      setAnswers((currentAnswers) => {
+        const nextAnswers = { ...currentAnswers };
+        delete nextAnswers[question.id];
+        return nextAnswers;
+      });
+      setSubmissionError(answerError instanceof Error ? answerError.message : 'We could not check this answer. Please try again.');
+    } finally {
+      answerCheckLock.current = false;
+      setIsCheckingAnswer(false);
+    }
+  }
+
   async function submitAnswers() {
     if (submissionLock.current || isSubmitting) return;
     if (questions.length === 0) {
@@ -156,6 +222,10 @@ export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRun
 
     if (submittedAnswers.some((answer) => !answer.selectedAnswer)) {
       setSubmissionError('Please choose an answer for every question before finishing.');
+      return;
+    }
+    if (mode === 'teacher' && questions.some((question) => !teacherFeedback[question.id])) {
+      setSubmissionError('Check every answer before finishing the Teacher Quiz.');
       return;
     }
 
@@ -269,6 +339,7 @@ export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRun
 
   const question = questions[currentIndex];
   const selectedOption = answers[question.id] ?? null;
+  const currentTeacherFeedback = teacherFeedback[question.id];
   const isLastQuestion = currentIndex === questions.length - 1;
   const progress = ((currentIndex + 1) / questions.length) * 100;
 
@@ -291,16 +362,23 @@ export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRun
         <div className="mt-6 grid gap-3">
           {question.options.map((option, index) => {
             const isSelected = selectedOption === option;
-            const optionClass = isSelected
-              ? 'border-brand-500 bg-brand-50 text-brand-900 ring-2 ring-brand-100'
-              : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50';
+            const isCorrectOption = currentTeacherFeedback?.correctAnswer === option || (currentTeacherFeedback?.isCorrect && isSelected);
+            const optionClass = mode === 'teacher' && currentTeacherFeedback
+              ? isSelected && !currentTeacherFeedback.isCorrect
+                ? 'border-rose-500 bg-rose-50 text-rose-900 ring-2 ring-rose-100'
+                : isCorrectOption
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-100'
+                  : 'border-slate-200 bg-white text-slate-500'
+              : isSelected
+                ? 'border-brand-500 bg-brand-50 text-brand-900 ring-2 ring-brand-100'
+                : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50';
 
             return (
               <button
                 key={option}
                 type="button"
-                onClick={() => setAnswers((currentAnswers) => ({ ...currentAnswers, [question.id]: option }))}
-                disabled={isSubmitting}
+                onClick={() => void selectAnswer(question, option)}
+                disabled={isSubmitting || (mode === 'teacher' && (isCheckingAnswer || Boolean(currentTeacherFeedback)))}
                 aria-pressed={isSelected}
                 className={`flex min-h-14 items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-wait ${optionClass}`}
               >
@@ -312,6 +390,17 @@ export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRun
         </div>
       </div>
 
+      {mode === 'teacher' && isCheckingAnswer && <p className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700" role="status">Checking your answer...</p>}
+      {mode === 'teacher' && currentTeacherFeedback && (
+        <div className={`mt-5 rounded-xl border p-4 ${currentTeacherFeedback.isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-rose-200 bg-rose-50 text-rose-900'}`} role="status">
+          <p className="font-bold">{currentTeacherFeedback.isCorrect ? '✓ Correct!' : '✗ Wrong'}</p>
+          {!currentTeacherFeedback.isCorrect && currentTeacherFeedback.correctAnswer && (
+            <p className="mt-2 text-sm">Correct answer: <strong>{String.fromCharCode(65 + question.options.indexOf(currentTeacherFeedback.correctAnswer))}. {currentTeacherFeedback.correctAnswer}</strong></p>
+          )}
+          {currentTeacherFeedback.explanation && <p className="mt-2 text-sm leading-6">{currentTeacherFeedback.explanation}</p>}
+        </div>
+      )}
+
       {submissionError && <p className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">{submissionError}</p>}
 
       <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -321,7 +410,7 @@ export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRun
         <button
           type="button"
           onClick={() => isLastQuestion ? void submitAnswers() : setCurrentIndex((index) => index + 1)}
-          disabled={isSubmitting || (!isLastQuestion && !selectedOption)}
+          disabled={isSubmitting || (mode === 'teacher' ? !currentTeacherFeedback : !isLastQuestion && !selectedOption)}
           className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSubmitting ? 'Submitting...' : isLastQuestion ? 'Finish quiz' : 'Next question'}

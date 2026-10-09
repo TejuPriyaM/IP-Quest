@@ -327,7 +327,7 @@ export default function LevelQuiz({ topic, initialLevel, onTeacherQuiz }: { topi
         </div>
       </div>
       <Link href="/progress" className="btn-secondary inline-flex">View performance history</Link>
-      <p className="text-sm text-slate-500">Each level has {progress?.questionsPerLevel ?? 10} questions. Your answers are saved as you go.</p>
+      <p className="text-sm text-slate-500">Questions update automatically when new eligible questions are added to the current level. Your answers are saved as you go.</p>
     </section>
   );
 }

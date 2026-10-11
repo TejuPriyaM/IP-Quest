@@ -19,7 +19,7 @@ export type Question = {
 };
 
 export type QuestionInput = Omit<Question, '$id'>;
-export type QuestionKind = 'learn-level' | 'teacher-quiz' | 'lesson-assessment';
+export type QuestionKind = 'learn-level' | 'teacher-quiz' | 'lesson-assessment' | 'teacher-assessment';
 
 type QuestionRow = Models.Row & Question;
 
@@ -79,6 +79,9 @@ export function validateQuestionInput(data: QuestionInput, kind?: QuestionKind) 
 	if (questionKind === 'lesson-assessment' && !lessonId) {
 		throw new QuestionError('Lesson assessment questions must be assigned to a lesson.');
 	}
+	if (questionKind === 'teacher-assessment' && (lessonId || !Number.isInteger(data.level) || (data.level as number) < 1 || (data.level as number) > 3)) {
+		throw new QuestionError('Teacher assessment questions must be assigned to Level 1, 2, or 3 without a lesson.');
+	}
 	if (questionKind === 'learn-level' && !lessonId && (!Number.isInteger(data.level) || (data.level as number) < 1 || (data.level as number) > 3)) {
 		throw new QuestionError('Learn Quiz questions must be assigned to Level 1, 2, or 3.');
 	}
@@ -87,17 +90,28 @@ export function validateQuestionInput(data: QuestionInput, kind?: QuestionKind) 
 		throw new QuestionError('Question question_text must be a non-empty string.');
 	}
 
-	if (!Array.isArray(data.options) || data.options.length !== 4 || data.options.some((option) => typeof option !== 'string' || !option.trim())) {
-		throw new QuestionError('A quiz question must have exactly four non-empty answer options.');
+	if (!Array.isArray(data.options)) {
+		throw new QuestionError('Question options must be an array.');
 	}
 
-	const normalizedOptions = data.options.map((option) => option.trim().toLocaleLowerCase());
-	if (new Set(normalizedOptions).size !== 4) {
-		throw new QuestionError('Answer options must be distinct.');
-	}
-
-	if (typeof data.correct_option !== 'string' || !data.options.some((option) => option.trim() === data.correct_option.trim())) {
-		throw new QuestionError('The correct answer must match one of the four options.');
+	if (questionKind === 'teacher-assessment') {
+		if (data.options.length !== 0) {
+			throw new QuestionError('Teacher assessment questions are written-answer questions and do not use MCQ options.');
+		}
+		if (typeof data.correct_option !== 'string' || data.correct_option.trim()) {
+			throw new QuestionError('Teacher assessment questions should not require a correct option.');
+		}
+	} else {
+		if (data.options.length !== 4 || data.options.some((option) => typeof option !== 'string' || !option.trim())) {
+			throw new QuestionError('A quiz question must have exactly four non-empty answer options.');
+		}
+		const normalizedOptions = data.options.map((option) => option.trim().toLocaleLowerCase());
+		if (new Set(normalizedOptions).size !== 4) {
+			throw new QuestionError('Answer options must be distinct.');
+		}
+		if (typeof data.correct_option !== 'string' || !data.options.some((option) => option.trim() === data.correct_option.trim())) {
+			throw new QuestionError('The correct answer must match one of the four options.');
+		}
 	}
 
 	if (typeof data.explanation !== 'string') {

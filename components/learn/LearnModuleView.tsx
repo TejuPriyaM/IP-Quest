@@ -11,7 +11,7 @@ import TechnicalAnimation from '@/components/learn/TechnicalAnimation';
 import { getCurrentProfile, type UserRole } from '@/lib/auth';
 import { listLessonsByTopic, type Lesson } from '@/lib/lessons';
 import { getLearnTopicForModule, type LearnModule } from '@/lib/learn';
-import { listTopics, type TopicRow } from '@/lib/topics';
+import { listPublishedLearnTopics, type TopicRow } from '@/lib/topics';
 
 type LearnModuleViewProps = {
   module: LearnModule;
@@ -721,7 +721,7 @@ export default function LearnModuleView({ module }: LearnModuleViewProps) {
 
     async function loadData() {
       try {
-        const topicRows = await listTopics();
+        const topicRows = await listPublishedLearnTopics();
 
         if (!isActive) {
           return;

@@ -38,8 +38,9 @@ function getJwtTables(jwt: string) {
   return new TablesDB(client);
 }
 
-function getQuestionKind(question: Pick<QuestionInput, 'lesson_id' | 'level'>): QuestionKind {
+function getQuestionKind(question: Partial<Pick<QuestionInput, 'lesson_id' | 'level' | 'options' | 'correct_option'>>): QuestionKind {
   if (question.lesson_id) return 'lesson-assessment';
+  if (question.level !== null && question.level !== undefined && Array.isArray(question.options) && question.options.length === 0 && (!question.correct_option || !question.correct_option.trim())) return 'teacher-assessment';
   return question.level === null || question.level === undefined ? 'teacher-quiz' : 'learn-level';
 }
 

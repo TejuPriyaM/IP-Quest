@@ -268,10 +268,10 @@ function serializeResponses(responses: AttemptResponses) {
   return JSON.stringify(responses);
 }
 
-async function getVerifiedTopic(topicId: string, jwt?: string) {
+async function getVerifiedTopic(topicId: string) {
   if (!topicId.trim()) throw new LevelQuizError('A valid quiz topic is required.', 400);
 
-  const tablesDb = jwt ? getJwtTables(jwt) : getPrivilegedTables();
+  const tablesDb = getPrivilegedTables();
 
   let topic: Models.Row & { title?: string; slug?: string; is_published?: boolean };
   try {
@@ -305,8 +305,8 @@ function assertAttemptOwner(attempt: QuizAttempt, userId: string) {
   if (attempt.user_id !== userId) throw new LevelQuizError('This quiz attempt is not available for your account.', 403);
 }
 
-async function getLevelQuestions(topicId: string, level: number, jwt?: string) {
-  const tablesDb = jwt ? getJwtTables(jwt) : getPrivilegedTables();
+async function getLevelQuestions(topicId: string, level: number) {
+  const tablesDb = getPrivilegedTables();
   const databaseId = getDatabaseId();
   const rows: QuestionRow[] = [];
 
@@ -332,7 +332,13 @@ async function getLevelQuestions(topicId: string, level: number, jwt?: string) {
     throw new LevelQuizError('Unable to load questions for this level.', 500);
   }
 
-  return rows.filter((question) => isLearnLevelQuestion(question) && isValidQuestion(question));
+  return sortByCreatedAt(rows.filter((question) =>
+    question.topic_id === topicId &&
+    question.level === level &&
+    question.is_published === true &&
+    isLearnLevelQuestion(question) &&
+    isValidQuestion(question),
+  ));
 }
 
 function shuffle<T>(items: T[]) {
@@ -342,6 +348,15 @@ function shuffle<T>(items: T[]) {
     [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
   }
   return shuffled;
+}
+
+function sortByCreatedAt<T extends { $createdAt?: string }>(items: T[]) {
+  return [...items].sort((first, second) => new Date(first.$createdAt ?? 0).getTime() - new Date(second.$createdAt ?? 0).getTime());
+}
+
+function mergeCurrentLevelQuestionIds(existingIds: string[], candidates: QuestionRow[]) {
+  const seen = new Set(existingIds);
+  return [...existingIds, ...sortByCreatedAt(candidates).map((question) => question.$id).filter((questionId) => !seen.has(questionId))];
 }
 
 function sanitizeQuestion(question: QuestionRow) {
@@ -407,22 +422,26 @@ function passedLevels(attempts: QuizAttempt[]) {
 
 export async function getLevelQuizProgress(jwt: string, topicId: string) {
   const user = await verifyQuizStudent(jwt);
-  const topic = await getVerifiedTopic(topicId, jwt);
+  const topic = await getVerifiedTopic(topicId);
   const attempts = await getAttemptRows(user.$id, topicId);
   const passed = passedLevels(attempts);
+  const levelQuestionCounts = await Promise.all(Array.from({ length: QUIZ_LEVEL_COUNT }, async (_, index) => ({
+    level: index + 1,
+    count: (await getLevelQuestions(topicId, index + 1)).length,
+  })));
 
   return {
     topicId,
     passPercentage: QUIZ_PASS_PERCENTAGE,
-    questionsPerLevel: QUIZ_QUESTIONS_PER_LEVEL,
-    levels: Array.from({ length: QUIZ_LEVEL_COUNT }, (_, index) => {
-      const level = index + 1;
+    questionsPerLevel: Math.max(0, ...levelQuestionCounts.map(({ count }) => count)),
+    levels: levelQuestionCounts.map(({ level, count }) => {
       const inProgress = attempts.find((attempt) => attempt.level === level && attempt.status === 'in_progress');
       return {
         level,
         passed: passed.has(level),
         unlocked: level === 1 || passed.has(level - 1),
         inProgressAttemptId: inProgress?.$id ?? null,
+        questionCount: count,
       };
     }),
     topicTitle: topic.title ?? 'Quiz',
@@ -490,7 +509,7 @@ export async function getStudentPerformanceHistory(jwt: string) {
 export async function startOrResumeLevel(jwt: string, topicId: string, level: number) {
   const user = await verifyQuizStudent(jwt);
   assertLevel(level);
-  const topic = await getVerifiedTopic(topicId, jwt);
+  const topic = await getVerifiedTopic(topicId);
   const attempts = await getAttemptRows(user.$id, topicId);
   if (level > 1 && !passedLevels(attempts).has(level - 1)) {
     throw new LevelQuizError('Pass the previous level before starting this one.', 403);
@@ -502,16 +521,43 @@ export async function startOrResumeLevel(jwt: string, topicId: string, level: nu
   if (existing) {
     attempt = existing;
     const parsed = parseResponses(existing.responses);
-    if (!parsed || parsed.questionIds.length !== QUIZ_QUESTIONS_PER_LEVEL) {
+    if (!parsed || parsed.questionIds.length < 1) {
       throw new LevelQuizError('This saved attempt cannot be resumed. Please contact your teacher.', 409);
     }
-    responses = parsed;
+
+    const candidates = await getLevelQuestions(topicId, level);
+    const mergedQuestionIds = mergeCurrentLevelQuestionIds(parsed.questionIds, candidates);
+    if (mergedQuestionIds.length !== parsed.questionIds.length) {
+      const questionById = new Map(candidates.map((question) => [question.$id, question]));
+      const mergedResponses = {
+        ...parsed,
+        questionIds: mergedQuestionIds,
+        answers: parsed.answers.filter((answer) => mergedQuestionIds.includes(answer.questionId)),
+      };
+      const presentation = createQuestionPresentation(mergedQuestionIds.flatMap((questionId) => {
+        const question = questionById.get(questionId);
+        return question ? [question] : [];
+      }));
+      responses = { ...mergedResponses, ...presentation };
+      try {
+        await getPrivilegedTables().updateRow<QuizAttempt>({
+          databaseId: getDatabaseId(),
+          tableId: quizAttemptsTableId,
+          rowId: attempt.$id,
+          data: { responses: serializeResponses(responses) },
+        });
+      } catch (error) {
+        throw getAttemptWriteError('Unable to refresh this quiz attempt with the latest questions.', error);
+      }
+    } else {
+      responses = parsed;
+    }
   } else {
-    const candidates = await getLevelQuestions(topicId, level, jwt);
-    if (candidates.length < QUIZ_QUESTIONS_PER_LEVEL) {
+    const candidates = await getLevelQuestions(topicId, level);
+    if (candidates.length < 1) {
       throw new LevelQuizError('This level is not ready yet. More questions are being added.', 409);
     }
-    const questionIds = shuffle(candidates.map((question) => question.$id)).slice(0, QUIZ_QUESTIONS_PER_LEVEL);
+    const questionIds = candidates.map((question) => question.$id);
     const questionById = new Map(candidates.map((question) => [question.$id, question]));
     const presentation = createQuestionPresentation(questionIds.flatMap((questionId) => {
       const question = questionById.get(questionId);
@@ -540,7 +586,7 @@ export async function startOrResumeLevel(jwt: string, topicId: string, level: nu
     }
   }
 
-  const tablesDb = getJwtTables(jwt);
+  const tablesDb = getPrivilegedTables();
   const questionRows = await Promise.all(responses.questionIds.map(async (questionId) => {
     try {
       const question = await tablesDb.getRow<QuestionRow>({ databaseId: getDatabaseId(), tableId: questionsTableId, rowId: questionId });
@@ -603,8 +649,8 @@ export async function submitLevelAnswer(jwt: string, attemptId: string, question
   }
 
   const attempt = await getAttempt(attemptId.trim());
-  const tablesDb = getJwtTables(jwt);
   assertAttemptOwner(attempt, user.$id);
+  await getVerifiedTopic(attempt.topic_id);
   if (attempt.status !== 'in_progress' || !Number.isInteger(attempt.level)) {
     throw new LevelQuizError('This attempt is no longer accepting answers.', 409);
   }
@@ -622,7 +668,7 @@ export async function submitLevelAnswer(jwt: string, attemptId: string, question
 
   let question: QuestionRow;
   try {
-    question = await tablesDb.getRow<QuestionRow>({ databaseId: getDatabaseId(), tableId: questionsTableId, rowId: questionId });
+    question = await getPrivilegedTables().getRow<QuestionRow>({ databaseId: getDatabaseId(), tableId: questionsTableId, rowId: questionId });
   } catch {
     throw new LevelQuizError('This question is no longer available.', 409);
   }
@@ -672,16 +718,16 @@ export async function completeLevelAttempt(jwt: string, attemptId: string) {
 
   const attempt = await getAttempt(attemptId.trim());
   assertAttemptOwner(attempt, user.$id);
+  await getVerifiedTopic(attempt.topic_id);
   if (attempt.status !== 'in_progress' || !Number.isInteger(attempt.level)) {
     throw new LevelQuizError('This attempt is already complete or invalid.', 409);
   }
   const responses = parseResponses(attempt.responses);
-  if (!responses || responses.questionIds.length !== QUIZ_QUESTIONS_PER_LEVEL || responses.answers.length !== responses.questionIds.length) {
+  if (!responses || responses.questionIds.length < 1 || responses.answers.length !== responses.questionIds.length) {
     throw new LevelQuizError('Answer every question before finishing the level.', 400);
   }
 
   const answerById = new Map(responses.answers.map((answer) => [answer.questionId, answer]));
-  const tablesDb = getJwtTables(jwt);
   const reviewAnswers: StoredAnswer[] = [];
   let score = 0;
   for (const questionId of responses.questionIds) {
@@ -690,7 +736,7 @@ export async function completeLevelAttempt(jwt: string, attemptId: string) {
 
     let question: QuestionRow;
     try {
-      question = await tablesDb.getRow<QuestionRow>({ databaseId: getDatabaseId(), tableId: questionsTableId, rowId: questionId });
+      question = await getPrivilegedTables().getRow<QuestionRow>({ databaseId: getDatabaseId(), tableId: questionsTableId, rowId: questionId });
     } catch {
       throw new LevelQuizError('A question in this attempt is no longer available.', 409);
     }

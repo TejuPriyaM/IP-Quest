@@ -2,55 +2,44 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
-import { listLessons, type Lesson } from '@/lib/lessons';
 import { createQuestion, deleteQuestion, listQuestions, type Question, type QuestionInput, updateQuestion } from '@/lib/questions';
 import { listTopics, type TopicRow } from '@/lib/topics';
 
 const difficultyOptions = ['Beginner', 'Intermediate', 'Advanced'];
 
-const createForm = (topicId = '', lessonId = ''): QuestionInput => ({
+const createForm = (topicId = '', level = 1): QuestionInput => ({
   topic_id: topicId,
-  lesson_id: lessonId,
-  options: ['', '', '', ''],
+  lesson_id: '',
+  options: [],
   correct_option: '',
   explanation: '',
   difficulty: 'Beginner',
   is_published: true,
   question_text: '',
-  level: null,
+  level,
   hint: '',
 });
-
-function shuffleQuestions(items: Question[]) {
-  const shuffled = [...items];
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
-  }
-  return shuffled;
-}
 
 function questionToForm(question: Question): QuestionInput {
   return {
     topic_id: question.topic_id,
     lesson_id: question.lesson_id ?? '',
     options: [...question.options],
-    correct_option: question.correct_option,
-    explanation: question.explanation,
+    correct_option: question.correct_option ?? '',
+    explanation: question.explanation ?? '',
     difficulty: question.difficulty,
     is_published: question.is_published,
     question_text: question.question_text,
-    level: null,
+    level: question.level ?? 1,
     hint: question.hint ?? '',
   };
 }
 
 export default function TeacherAssessmentPage() {
   const [topics, setTopics] = useState<TopicRow[]>([]);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedTopicId, setSelectedTopicId] = useState('');
-  const [selectedLessonId, setSelectedLessonId] = useState('');
+  const [selectedLevel, setSelectedLevel] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -66,10 +55,9 @@ export default function TeacherAssessmentPage() {
     setLoadError('');
 
     try {
-      const [topicRows, lessonRows, questionRows] = await Promise.all([listTopics(), listLessons(), listQuestions()]);
+      const [topicRows, questionRows] = await Promise.all([listTopics(), listQuestions()]);
       setTopics(topicRows);
-      setLessons(lessonRows);
-      setQuestions(shuffleQuestions(questionRows));
+      setQuestions(questionRows.filter((question) => question.level !== null && question.level !== undefined && !question.lesson_id && question.options.length === 0));
 
       if (!selectedTopicId && topicRows[0]) {
         setSelectedTopicId(topicRows[0].$id);
@@ -92,49 +80,9 @@ export default function TeacherAssessmentPage() {
       return;
     }
 
-    if (!selectedTopicId) {
-      setSelectedLessonId('');
-      return;
-    }
-
-    const topicLessons = lessons.filter((lesson) => lesson.topic_id === selectedTopicId);
-    if (!topicLessons.some((lesson) => lesson.$id === selectedLessonId)) {
-      setSelectedLessonId(topicLessons[0]?.$id ?? '');
-    }
-  }, [selectedTopicId, selectedLessonId, lessons, topics]);
-
-  useEffect(() => {
-    if (!selectedTopicId) {
-      setForm(createForm());
-      return;
-    }
-
-    const nextLessonId = selectedLessonId || lessons.find((lesson) => lesson.topic_id === selectedTopicId)?.$id || '';
-    setForm((current) => ({
-      ...createForm(selectedTopicId, nextLessonId),
-      ...current,
-      topic_id: selectedTopicId,
-      lesson_id: nextLessonId,
-      is_published: true,
-    }));
-  }, [selectedTopicId, selectedLessonId, lessons]);
-
-  const topicLessons = useMemo(() => lessons.filter((lesson) => lesson.topic_id === selectedTopicId), [lessons, selectedTopicId]);
-
-  function handleTopicFilterChange(topicId: string) {
-    const nextLessonId = lessons.find((lesson) => lesson.topic_id === topicId)?.$id ?? '';
-    setSelectedTopicId(topicId);
-    setSelectedLessonId(nextLessonId);
-    setSearchTerm('');
-    setEditingQuestion(null);
-    setForm(createForm(topicId, nextLessonId));
-  }
-
-  function handleLessonFilterChange(lessonId: string) {
-    setSelectedLessonId(lessonId);
-    setEditingQuestion(null);
-    setForm(createForm(selectedTopicId, lessonId || topicLessons[0]?.$id || ''));
-  }
+    if (!selectedTopicId) return;
+    setForm((current) => ({ ...createForm(selectedTopicId, selectedLevel), ...current, topic_id: selectedTopicId, level: selectedLevel, is_published: true }));
+  }, [selectedLevel, selectedTopicId, topics]);
 
   const visibleQuestions = useMemo(() => {
     if (!selectedTopicId) return [];
@@ -142,30 +90,23 @@ export default function TeacherAssessmentPage() {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return questions
       .filter((question) => question.topic_id === selectedTopicId)
-      .filter((question) => Boolean(question.lesson_id))
+      .filter((question) => question.level === selectedLevel)
       .filter((question) => question.is_published)
-      .filter((question) => lessons.some((lesson) => lesson.$id === question.lesson_id && lesson.topic_id === selectedTopicId))
-      .filter((question) => (selectedLessonId ? question.lesson_id === selectedLessonId : true))
       .filter((question) => {
         if (!normalizedSearch) return true;
         return question.question_text.toLowerCase().includes(normalizedSearch)
           || question.difficulty.toLowerCase().includes(normalizedSearch)
-          || question.options.some((option) => option.toLowerCase().includes(normalizedSearch));
+          || (question.hint ?? '').toLowerCase().includes(normalizedSearch);
       });
-  }, [lessons, questions, searchTerm, selectedLessonId, selectedTopicId]);
+  }, [questions, searchTerm, selectedLevel, selectedTopicId]);
 
   function getTopicTitle(topicId: string) {
     return topics.find((topic) => topic.$id === topicId)?.title ?? 'Unknown topic';
   }
 
-  function getLessonTitle(lessonId: string) {
-    return lessons.find((lesson) => lesson.$id === lessonId)?.title ?? 'Unknown lesson';
-  }
-
   function openCreateForm() {
-    const defaultLessonId = selectedLessonId || topicLessons[0]?.$id || '';
     setEditingQuestion(null);
-    setForm(createForm(selectedTopicId, defaultLessonId));
+    setForm(createForm(selectedTopicId, selectedLevel));
     setActionError('');
     setSuccessMessage('');
   }
@@ -178,61 +119,26 @@ export default function TeacherAssessmentPage() {
   }
 
   function closeForm() {
-    const defaultLessonId = selectedLessonId || topicLessons[0]?.$id || '';
     setEditingQuestion(null);
-    setForm(createForm(selectedTopicId, defaultLessonId));
+    setForm(createForm(selectedTopicId, selectedLevel));
   }
 
   function updateFormField<K extends keyof QuestionInput>(field: K, value: QuestionInput[K]) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function updateOption(index: number, value: string) {
-    setForm((current) => {
-      const nextOptions = [...current.options];
-      const previousValue = nextOptions[index];
-      nextOptions[index] = value;
-
-      return {
-        ...current,
-        options: nextOptions,
-        correct_option: current.correct_option === previousValue ? value : current.correct_option,
-      };
-    });
-  }
-
   function validateForm(): QuestionInput {
     if (!form.topic_id) {
       throw new Error('Please select a topic for this assessment question.');
     }
-    if (!form.lesson_id) {
-      throw new Error('Please select the lesson that owns this assessment question.');
-    }
-
-    const selectedLesson = lessons.find((lesson) => lesson.$id === form.lesson_id);
-    if (!selectedLesson) {
-      throw new Error('The selected lesson could not be found.');
-    }
-    if (selectedLesson.topic_id !== form.topic_id) {
-      throw new Error('The lesson must belong to the selected topic.');
+    if (!Number.isInteger(form.level) || (form.level as number) < 1 || (form.level as number) > 3) {
+      throw new Error('Please select Level 1, 2, or 3.');
     }
     if (!form.question_text.trim()) {
       throw new Error('Question text is required.');
     }
-    if (form.options.length !== 4 || form.options.some((option) => !option.trim())) {
-      throw new Error('Each assessment question must have four non-empty answer options.');
-    }
-    if (new Set(form.options.map((option) => option.trim().toLocaleLowerCase())).size !== 4) {
-      throw new Error('Answer options must be distinct.');
-    }
-    if (!form.correct_option.trim() || !form.options.some((option) => option.trim() === form.correct_option.trim())) {
-      throw new Error('Select a correct answer from the list of options.');
-    }
     if (!form.difficulty.trim()) {
       throw new Error('Please choose a difficulty level.');
-    }
-    if (typeof form.explanation !== 'string' || !form.explanation.trim()) {
-      throw new Error('Please add an explanation for the answer key.');
     }
     if (form.hint && form.hint.length > 500) {
       throw new Error('Hints must be 500 characters or fewer.');
@@ -240,14 +146,14 @@ export default function TeacherAssessmentPage() {
 
     return {
       topic_id: form.topic_id,
-      lesson_id: form.lesson_id,
-      options: form.options.map((option) => option.trim()),
-      correct_option: form.correct_option.trim(),
+      lesson_id: '',
+      options: [],
+      correct_option: '',
       explanation: form.explanation.trim(),
       difficulty: form.difficulty,
       is_published: form.is_published,
       question_text: form.question_text.trim(),
-      level: null,
+      level: Number(form.level),
       hint: (form.hint ?? '').trim(),
     };
   }
@@ -262,10 +168,10 @@ export default function TeacherAssessmentPage() {
       setIsSubmitting(true);
 
       if (editingQuestion) {
-        await updateQuestion(editingQuestion.$id, payload);
+        await updateQuestion(editingQuestion.$id, payload, 'teacher-assessment');
         setSuccessMessage('Assessment question updated successfully.');
       } else {
-        await createQuestion(payload);
+        await createQuestion(payload, 'teacher-assessment');
         setSuccessMessage('Assessment question created successfully.');
       }
 
@@ -306,9 +212,9 @@ export default function TeacherAssessmentPage() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Teacher workspace</p>
             <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Assessment Questions</h1>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">Manage the existing assessment questions for each topic and lesson without duplicating records.</p>
+            <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">Create written topic-and-level assignments for students without using the MCQ flow.</p>
           </div>
-          <button type="button" onClick={openCreateForm} disabled={!selectedTopicId || !selectedLessonId} className="btn-primary disabled:cursor-not-allowed disabled:opacity-60">Add New Assessment Question</button>
+          <button type="button" onClick={openCreateForm} disabled={!selectedTopicId} className="btn-primary disabled:cursor-not-allowed disabled:opacity-60">Add New Assessment Question</button>
         </div>
 
         {actionError && <p role="alert" className="mt-6 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</p>}
@@ -329,7 +235,12 @@ export default function TeacherAssessmentPage() {
                 <select
                   id="assessment-topic-filter"
                   value={selectedTopicId}
-                  onChange={(event) => handleTopicFilterChange(event.target.value)}
+                  onChange={(event) => {
+                    setSelectedTopicId(event.target.value);
+                    setSearchTerm('');
+                    setEditingQuestion(null);
+                    setForm(createForm(event.target.value, selectedLevel));
+                  }}
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                 >
                   <option value="">Select a topic</option>
@@ -340,18 +251,22 @@ export default function TeacherAssessmentPage() {
               </div>
 
               <div className="mb-4">
-                <label htmlFor="assessment-lesson-filter" className="mb-2 block text-sm font-semibold text-slate-700">Lesson</label>
+                <label htmlFor="assessment-level-filter" className="mb-2 block text-sm font-semibold text-slate-700">Level</label>
                 <select
-                  id="assessment-lesson-filter"
-                  value={selectedLessonId}
-                  onChange={(event) => handleLessonFilterChange(event.target.value)}
+                  id="assessment-level-filter"
+                  value={selectedLevel}
+                  onChange={(event) => {
+                    const nextLevel = Number(event.target.value) || 1;
+                    setSelectedLevel(nextLevel);
+                    setEditingQuestion(null);
+                    setForm(createForm(selectedTopicId, nextLevel));
+                  }}
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                   disabled={!selectedTopicId}
                 >
-                  <option value="">All lessons</option>
-                  {topicLessons.map((lesson) => (
-                    <option key={lesson.$id} value={lesson.$id}>{lesson.title}</option>
-                  ))}
+                  <option value={1}>Level 1</option>
+                  <option value={2}>Level 2</option>
+                  <option value={3}>Level 3</option>
                 </select>
               </div>
 
@@ -361,7 +276,7 @@ export default function TeacherAssessmentPage() {
                   id="assessment-search"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search assessment questions..."
+                  placeholder="Search written questions..."
                   className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                 />
               </div>
@@ -374,7 +289,7 @@ export default function TeacherAssessmentPage() {
               {selectedTopicId ? (
                 visibleQuestions.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
-                    No assessment questions found for {getTopicTitle(selectedTopicId)}{selectedLessonId ? ` in ${getLessonTitle(selectedLessonId)}` : ''} yet.
+                    No written assessment questions found for {getTopicTitle(selectedTopicId)} · Level {selectedLevel} yet.
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -386,17 +301,17 @@ export default function TeacherAssessmentPage() {
                         className={`w-full rounded-xl border p-3 text-left transition ${editingQuestion?.$id === question.$id ? 'border-brand-300 bg-brand-50' : 'border-slate-200 bg-white hover:border-brand-200 hover:bg-brand-50/40'}`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600">Assessment</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600">Written</span>
                           <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${question.is_published ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{question.is_published ? 'Published' : 'Draft'}</span>
                         </div>
                         <p className="mt-3 line-clamp-3 text-sm font-semibold text-slate-900">{question.question_text}</p>
-                        <p className="mt-2 text-xs text-slate-500">{question.difficulty} · {getLessonTitle(question.lesson_id ?? '')}</p>
+                        <p className="mt-2 text-xs text-slate-500">{question.difficulty} · Level {question.level}</p>
                       </button>
                     ))}
                   </div>
                 )
               ) : (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">Choose a topic to view its assessment questions.</div>
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">Choose a topic to view its written assessment questions.</div>
               )}
             </aside>
 
@@ -422,15 +337,12 @@ export default function TeacherAssessmentPage() {
                   <select
                     id="assessment-topic"
                     value={form.topic_id}
-                    disabled={Boolean(editingQuestion)}
                     onChange={(event) => {
-                      const topicId = event.target.value;
-                      const nextLessonId = lessons.find((lesson) => lesson.topic_id === topicId)?.$id ?? '';
-                      setForm((current) => ({ ...current, topic_id: topicId, lesson_id: nextLessonId }));
-                      setSelectedTopicId(topicId);
-                      setSelectedLessonId(nextLessonId);
+                      const nextTopicId = event.target.value;
+                      setSelectedTopicId(nextTopicId);
+                      setForm((current) => ({ ...current, topic_id: nextTopicId, level: selectedLevel }));
                     }}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                   >
                     <option value="">Select a topic</option>
                     {topics.map((topic) => <option key={topic.$id} value={topic.$id}>{topic.title}</option>)}
@@ -438,53 +350,26 @@ export default function TeacherAssessmentPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="assessment-lesson" className="mb-2 block text-sm font-semibold text-slate-700">Lesson</label>
+                  <label htmlFor="assessment-level" className="mb-2 block text-sm font-semibold text-slate-700">Level</label>
                   <select
-                    id="assessment-lesson"
-                    value={form.lesson_id ?? ''}
-                    disabled={!form.topic_id || Boolean(editingQuestion)}
+                    id="assessment-level"
+                    value={form.level ?? 1}
                     onChange={(event) => {
-                      updateFormField('lesson_id', event.target.value);
-                      setSelectedLessonId(event.target.value);
+                      const nextLevel = Number(event.target.value) || 1;
+                      setSelectedLevel(nextLevel);
+                      updateFormField('level', nextLevel);
                     }}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                   >
-                    <option value="">Select a lesson</option>
-                    {lessons.filter((lesson) => lesson.topic_id === form.topic_id).map((lesson) => (
-                      <option key={lesson.$id} value={lesson.$id}>{lesson.title}</option>
-                    ))}
+                    <option value={1}>Level 1</option>
+                    <option value={2}>Level 2</option>
+                    <option value={3}>Level 3</option>
                   </select>
                 </div>
 
                 <div>
-                  <label htmlFor="assessment-question-text" className="mb-2 block text-sm font-semibold text-slate-700">Question text</label>
-                  <textarea id="assessment-question-text" rows={4} value={form.question_text} onChange={(event) => updateFormField('question_text', event.target.value)} className="w-full resize-y rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
-                </div>
-
-                <fieldset>
-                  <legend className="mb-2 block text-sm font-semibold text-slate-700">Answer options</legend>
-                  <div className="space-y-3">
-                    {form.options.map((option, index) => (
-                      <div key={index} className="flex gap-3">
-                        <input
-                          aria-label={`Answer option ${index + 1}`}
-                          value={option}
-                          onChange={(event) => updateOption(index, event.target.value)}
-                          className="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </fieldset>
-
-                <div>
-                  <label htmlFor="assessment-correct-option" className="mb-2 block text-sm font-semibold text-slate-700">Correct option</label>
-                  <select id="assessment-correct-option" value={form.correct_option} onChange={(event) => updateFormField('correct_option', event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
-                    <option value="">Select the correct option</option>
-                    {form.options.filter((option) => option.trim()).map((option, index) => (
-                      <option key={`${option}-${index}`} value={option}>{option}</option>
-                    ))}
-                  </select>
+                  <label htmlFor="assessment-question-text" className="mb-2 block text-sm font-semibold text-slate-700">Question</label>
+                  <textarea id="assessment-question-text" rows={5} value={form.question_text} onChange={(event) => updateFormField('question_text', event.target.value)} className="w-full resize-y rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" placeholder="Explain why trademarks are important for protecting a brand." />
                 </div>
 
                 <div>
@@ -497,24 +382,19 @@ export default function TeacherAssessmentPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="assessment-explanation" className="mb-2 block text-sm font-semibold text-slate-700">Explanation</label>
-                  <textarea id="assessment-explanation" rows={3} value={form.explanation} onChange={(event) => updateFormField('explanation', event.target.value)} className="w-full resize-y rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
-                </div>
-
-                <div>
-                  <label htmlFor="assessment-hint" className="mb-2 block text-sm font-semibold text-slate-700">Hint</label>
-                  <input id="assessment-hint" value={form.hint ?? ''} onChange={(event) => updateFormField('hint', event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+                  <label htmlFor="assessment-hint" className="mb-2 block text-sm font-semibold text-slate-700">Optional hint</label>
+                  <textarea id="assessment-hint" rows={2} maxLength={500} value={form.hint ?? ''} onChange={(event) => updateFormField('hint', event.target.value)} className="w-full resize-y rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
                 </div>
 
                 <label className="flex items-center gap-3 text-sm font-semibold text-slate-700">
-                  <input type="checkbox" checked={form.is_published} onChange={(event) => updateFormField('is_published', event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-brand-600" />
+                  <input type="checkbox" checked={form.is_published} onChange={(event) => updateFormField('is_published', event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                   Published
                 </label>
 
                 <div className="flex justify-end gap-3">
                   <button type="button" onClick={closeForm} className="btn-secondary">Clear</button>
                   <button type="submit" disabled={isSubmitting} className="btn-primary disabled:cursor-not-allowed disabled:opacity-60">
-                    {isSubmitting ? 'Saving...' : editingQuestion ? 'Update question' : 'Create question'}
+                    {isSubmitting ? 'Saving...' : editingQuestion ? 'Update question' : 'Save question'}
                   </button>
                 </div>
               </form>

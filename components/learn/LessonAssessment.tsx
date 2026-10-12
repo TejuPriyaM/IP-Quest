@@ -182,7 +182,10 @@ export default function LessonAssessment({ topic }: { topic: { id: string; title
                     <textarea
                       rows={8}
                       value={isEditing ? draftAnswer : ''}
-                      onChange={(event) => setDraftAnswer(event.target.value)}
+                      onChange={(event) => {
+                        setEditingQuestionId(question.id);
+                        setDraftAnswer(event.target.value);
+                      }}
                       placeholder="Write your answer here..."
                       className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                     />

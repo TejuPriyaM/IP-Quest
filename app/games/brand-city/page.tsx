@@ -25,12 +25,12 @@ export default function BrandCityPage() {
   return (
     <Region3DGame
       title="BRAND CITY"
-      subtitle="Build a brand and stop the market confusion"
-      description="Open a new shop, design a brand identity, investigate rival branding, and protect the brand in the correct IP space."
+      subtitle="Design a shop sign people can recognise"
+      description="Choose a shop name and symbol, compare nearby signs, and learn how brands help customers tell shops apart."
       accent="from-violet-500 via-purple-500 to-indigo-700"
-      mission="Create a clear, memorable brand and repair confusing shop signs."
-      intro="Customers are confused between two stores. Explore Brand City and compare the visual identities."
-      objective="Create a clear brand and fix the confusing shop identity"
+      mission="Create a shop sign that is easy to tell apart."
+      intro="Two shops have signs that look alike, so customers may mix them up. Explore the street and help one shop make its sign clearer."
+      objective="Choose a name and symbol for your shop"
       objects={cityObjects}
       missions={brandMissions}
       guide="Ari, brand designer"

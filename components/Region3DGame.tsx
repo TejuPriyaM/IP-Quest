@@ -25,7 +25,7 @@ export type RegionMission = {
 
 export type RegionActivity = {
   objectIds: string[];
-  type: 'art' | 'brand' | 'document' | 'sort' | 'security';
+  type: 'art' | 'brand' | 'document' | 'sort' | 'security' | 'classify' | 'password' | 'source-check';
 };
 
 export type RegionEnvironment = 'lab' | 'studio' | 'city' | 'vault' | 'school' | 'startup';
@@ -81,7 +81,7 @@ const makeMission = (title: string, objective: string, objectIds: string[], brie
   briefing,
   why,
 });
-const sourcePassage = 'The moisture sensor activates the irrigation pump only when the soil is dry.';
+const sourcePassage = 'Water the garden when the soil feels dry near the surface.';
 
 export default function Region3DGame({
   title,
@@ -123,6 +123,10 @@ export default function Region3DGame({
   const [brandSymbol, setBrandSymbol] = useState('✦');
   const [documentText, setDocumentText] = useState(sourcePassage);
   const [documentSource, setDocumentSource] = useState('');
+  const [documentApproach, setDocumentApproach] = useState<'paraphrase' | 'quote' | ''>('');
+  const [sourceCheckAnswer, setSourceCheckAnswer] = useState('');
+  const [vaultClassifications, setVaultClassifications] = useState<Record<string, string>>({});
+  const [passwordChoice, setPasswordChoice] = useState('');
   const [draggedCreditCard, setDraggedCreditCard] = useState<string | null>(null);
   const [creditPlacements, setCreditPlacements] = useState<Record<string, string>>({});
   const [accessRules, setAccessRules] = useState({ engineer: false, guest: true });
@@ -671,7 +675,10 @@ export default function Region3DGame({
 
         const nearestId = nearest?.id ?? '';
         if (nearestId !== lastNearbyId) {
-          setPrompt(nearest ? `[E] ${nearest.kind === 'collect' ? 'PICK UP' : 'INTERACT'} · ${nearest.label}` : '[E] Explore');
+          const action = nearest?.kind === 'collect' ? 'PICK UP' : 'EXPLORE';
+          setPrompt(nearest
+            ? isTouchModeRef.current ? `Tap EXPLORE · ${nearest.label}` : `[E] ${action} · ${nearest.label}`
+            : isTouchModeRef.current ? 'Explore' : '[E] Explore');
           lastNearbyId = nearestId;
         }
 
@@ -950,13 +957,59 @@ export default function Region3DGame({
     } else if (activeActivityDefinition.type === 'document') {
       const editedText = documentText.trim();
       const source = documentSource.trim();
-      if (editedText.length < 30 || !source || editedText.toLocaleLowerCase() === sourcePassage.toLocaleLowerCase()) {
-        setStatus('Rewrite the source idea in your own words and add its source before saving the repair.');
+      const matchesSource = editedText.toLocaleLowerCase() === sourcePassage.toLocaleLowerCase();
+      const isQuoted = (editedText.startsWith('"') && editedText.endsWith('"'))
+        || (editedText.startsWith('“') && editedText.endsWith('”'));
+      if (!documentApproach || !source) {
+        setStatus('Choose how you used the source and name it before saving.');
+        return;
+      }
+      if (documentApproach === 'paraphrase' && (editedText.length < 30 || matchesSource)) {
+        setStatus('A paraphrase needs to explain the idea in your own words, not repeat the source sentence. Add its source too.');
+        return;
+      }
+      if (documentApproach === 'quote' && (!isQuoted || !editedText.includes(sourcePassage))) {
+        setStatus('For a direct quote, copy the source sentence exactly and put quotation marks around it. Remember to name the source.');
         return;
       }
       contextRef.current.addInventory('Corrected assignment');
       onInteractRef.current(item, contextRef.current);
-      contextRef.current.setStatus(`Assignment repaired and attributed to ${source}. The student’s ideas are now separated from the source material.`);
+      contextRef.current.setStatus(`Assignment updated: the ${documentApproach === 'quote' ? 'direct quote' : 'paraphrase'} is credited to ${source}.`);
+    } else if (activeActivityDefinition.type === 'source-check') {
+      const correctAnswer = activeActivity === 'notes' ? 'cite-paraphrase' : 'credit-source';
+      if (sourceCheckAnswer !== correctAnswer) {
+        setStatus(activeActivity === 'notes'
+          ? 'A paraphrase still uses an idea you learned from the source. Try again.'
+          : 'Changing the font or only a few words is not enough. Try again.');
+        return;
+      }
+      onInteractRef.current(item, contextRef.current);
+      contextRef.current.setStatus(activeActivity === 'notes'
+        ? 'That’s right. Give the source credit even when you explain its idea in your own words.'
+        : 'Good check! Put direct words in quotation marks and cite the source, or paraphrase genuinely in your own words and cite it.');
+    } else if (activeActivityDefinition.type === 'classify') {
+      const expectedClassifications: Record<string, string> = {
+        recipe: 'private',
+        plan: 'private',
+        advertisement: 'public',
+      };
+      if (Object.keys(expectedClassifications).some((id) => !vaultClassifications[id])) {
+        setStatus('Choose what to do with all three items before checking your answer.');
+        return;
+      }
+      if (Object.entries(expectedClassifications).some(([id, classification]) => vaultClassifications[id] !== classification)) {
+        setStatus('Check the labels: the recipe and internal plan are private here, but the advertisement has already been shared publicly.');
+        return;
+      }
+      onInteractRef.current(item, contextRef.current);
+      contextRef.current.setStatus('Correct! Keep the private recipe and plan protected; something already published cannot be a secret.');
+    } else if (activeActivityDefinition.type === 'password') {
+      if (passwordChoice !== 'river-cedar-moon') {
+        setStatus('Try a longer, less predictable passphrase. Avoid easy words, names, and common number patterns.');
+        return;
+      }
+      onInteractRef.current(item, contextRef.current);
+      contextRef.current.setStatus('Good choice: longer and harder to guess. In real life, use a unique password and never share it.');
     } else if (activeActivityDefinition.type === 'sort') {
       const expectedPlacements: Record<string, string> = {
         own: 'my-work',
@@ -1067,20 +1120,22 @@ export default function Region3DGame({
         )}
 
         {isTouchMode && (phase === 'playing' || phase === 'tutorial') && (
-          <div className="absolute inset-x-3 bottom-4 z-20 flex items-end justify-between sm:hidden">
+          <div className="absolute inset-x-3 bottom-4 z-20 flex items-end justify-between">
             <div
               data-game-control
-              className="relative h-28 w-28 touch-none rounded-full border border-white/45 bg-slate-950/35 shadow-lg"
+              role="group"
+              aria-label="Movement control"
+              className="relative flex h-28 w-28 touch-none items-center justify-center rounded-full border border-white/45 bg-slate-950/50 text-xs font-bold shadow-lg"
               onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); moveJoystick(event); }}
               onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) moveJoystick(event); }}
               onPointerUp={(event) => { moveJoystick(event, false); event.currentTarget.releasePointerCapture(event.pointerId); }}
               onPointerCancel={(event) => moveJoystick(event, false)}
-              aria-label="Virtual movement joystick"
             >
+              <span className="pointer-events-none absolute bottom-2">Move</span>
               <span className="pointer-events-none absolute left-1/2 top-1/2 h-10 w-10 rounded-full bg-white/85 shadow transition-transform" style={{ transform: `translate(calc(-50% + ${joystickPosition.x * 32}px), calc(-50% + ${joystickPosition.y * 32}px))` }} />
             </div>
             <div className="flex gap-2" data-game-control>
-              <button type="button" onClick={triggerInteract} className="h-14 rounded-2xl bg-brand-600 px-5 text-lg font-black shadow-lg">E</button>
+              <button type="button" onClick={triggerInteract} aria-label="Explore nearby object" className="h-14 rounded-2xl bg-brand-600 px-5 text-sm font-black shadow-lg">Explore</button>
             </div>
           </div>
         )}
@@ -1089,10 +1144,10 @@ export default function Region3DGame({
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
             <section className="max-h-full w-full max-w-2xl overflow-y-auto rounded-3xl border border-white/15 bg-slate-900 p-5 shadow-2xl sm:p-7">
               <p className="text-xs font-black uppercase tracking-[0.2em] text-sky-300">
-                {activeActivityDefinition.type === 'art' ? 'Creator workstation' : activeActivityDefinition.type === 'brand' ? 'Brand design workstation' : activeActivityDefinition.type === 'document' ? 'Assignment editor' : activeActivityDefinition.type === 'sort' ? 'Attribution board' : 'Security access console'}
+                {activeActivityDefinition.type === 'art' ? 'Creator workstation' : activeActivityDefinition.type === 'brand' ? 'Brand design workstation' : activeActivityDefinition.type === 'document' ? 'Assignment editor' : activeActivityDefinition.type === 'sort' ? 'Attribution board' : activeActivityDefinition.type === 'source-check' ? 'Source-check challenge' : activeActivityDefinition.type === 'classify' ? 'Vault sorting challenge' : activeActivityDefinition.type === 'password' ? 'Server security challenge' : 'Security access console'}
               </p>
               <h2 className="mt-2 text-2xl font-black">
-                {activeActivityDefinition.type === 'art' ? 'Create an original picture' : activeActivityDefinition.type === 'brand' ? 'Design the storefront identity' : activeActivityDefinition.type === 'document' ? 'Repair and attribute the assignment' : activeActivityDefinition.type === 'sort' ? 'Sort the creative project' : 'Set the access controls'}
+                {activeActivityDefinition.type === 'art' ? 'Create an original picture' : activeActivityDefinition.type === 'brand' ? 'Design the storefront identity' : activeActivityDefinition.type === 'document' ? 'Repair and attribute the assignment' : activeActivityDefinition.type === 'sort' ? 'Sort the creative project' : activeActivityDefinition.type === 'source-check' ? 'What should the student do?' : activeActivityDefinition.type === 'classify' ? 'Which information should stay private?' : activeActivityDefinition.type === 'password' ? 'Choose a strong passphrase' : 'Set the access controls'}
               </h2>
               {activeActivityDefinition.type === 'art' && (
                 <>
@@ -1135,18 +1190,128 @@ export default function Region3DGame({
               )}
               {activeActivityDefinition.type === 'document' && (
                 <div className="mt-4 space-y-4">
-                  <p className="rounded-xl bg-amber-300/10 p-3 text-sm text-amber-100">Rewrite in your own words and identify the source used for the idea.</p>
+                  <p className="rounded-xl bg-amber-300/10 p-3 text-sm text-amber-100">Choose one: paraphrase the idea genuinely in your own words, or use the exact sentence as a quote. Either way, cite the source.</p>
                   <blockquote className="rounded-xl border-l-4 border-sky-400 bg-slate-800 p-4 text-sm italic text-slate-200">
                     Source excerpt: “{sourcePassage}”
                   </blockquote>
+                  <fieldset>
+                    <legend className="text-sm font-bold text-slate-200">How will you use this source?</legend>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      {[
+                        { value: 'paraphrase', label: 'Paraphrase in my own words' },
+                        { value: 'quote', label: 'Use a direct quote' },
+                      ].map((choice) => (
+                        <button
+                          key={choice.value}
+                          type="button"
+                          aria-pressed={documentApproach === choice.value}
+                          onClick={() => setDocumentApproach(choice.value as 'paraphrase' | 'quote')}
+                          className={`rounded-xl border p-3 text-left text-sm font-semibold ${documentApproach === choice.value ? 'border-sky-300 bg-sky-500/20 text-white' : 'border-white/10 bg-slate-800 text-slate-200'}`}
+                        >
+                          {choice.label}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
                   <label className="block text-sm font-bold text-slate-200">
-                    Revised assignment
-                    <textarea value={documentText} onChange={(event) => setDocumentText(event.target.value)} rows={5} className="mt-2 w-full resize-y rounded-xl border border-white/15 bg-slate-800 px-4 py-3 text-white outline-none focus:border-sky-400" />
+                    {documentApproach === 'quote' ? 'Quoted sentence (include quotation marks)' : 'Your assignment sentence'}
+                    <textarea
+                      value={documentText}
+                      onChange={(event) => setDocumentText(event.target.value)}
+                      rows={4}
+                      placeholder={documentApproach === 'quote' ? `“${sourcePassage}”` : 'Explain the idea in a new sentence, in your own words.'}
+                      className="mt-2 w-full resize-y rounded-xl border border-white/15 bg-slate-800 px-4 py-3 text-white outline-none focus:border-sky-400"
+                    />
+                    {documentApproach === 'paraphrase' && <span className="mt-1 block text-xs font-normal text-slate-300">Changing just a word or two is not a paraphrase.</span>}
                   </label>
                   <label className="block text-sm font-bold text-slate-200">
-                    Source or creator
-                    <input value={documentSource} onChange={(event) => setDocumentSource(event.target.value)} placeholder="e.g. School Garden Research Guide" className="mt-2 w-full rounded-xl border border-white/15 bg-slate-800 px-4 py-3 text-white outline-none focus:border-sky-400 placeholder:text-slate-500" />
+                    Source title
+                    <input value={documentSource} onChange={(event) => setDocumentSource(event.target.value)} placeholder="School Garden Guide" className="mt-2 w-full rounded-xl border border-white/15 bg-slate-800 px-4 py-3 text-white outline-none focus:border-sky-400 placeholder:text-slate-500" />
                   </label>
+                </div>
+              )}
+              {activeActivityDefinition.type === 'source-check' && (
+                <div className="mt-4 space-y-4">
+                  <p className="text-sm leading-6 text-slate-300">
+                    {activeActivity === 'notes'
+                      ? 'You learned the garden idea from a guide and wrote it in your own words. What should you do?'
+                      : 'The assignment uses the source sentence word-for-word, but has no quotation marks or source credit. Pick the best next step.'}
+                  </p>
+                  <div className="space-y-2">
+                    {(activeActivity === 'notes'
+                      ? [
+                        { id: 'skip-credit', label: 'No credit is needed because the sentence is in my own words.' },
+                        { id: 'cite-paraphrase', label: 'Cite the guide because the idea came from it.' },
+                        { id: 'cite-teacher', label: 'Credit only my teacher, not the guide.' },
+                      ]
+                      : [
+                        { id: 'change-font', label: 'Change the font so the sentence looks different.' },
+                        { id: 'credit-source', label: 'Add quotation marks and cite the source, or paraphrase it genuinely and cite the source.' },
+                        { id: 'swap-words', label: 'Change a couple of words; then no source is needed.' },
+                      ]).map((answer) => (
+                      <button
+                        key={answer.id}
+                        type="button"
+                        aria-pressed={sourceCheckAnswer === answer.id}
+                        onClick={() => setSourceCheckAnswer(answer.id)}
+                        className={`w-full rounded-xl border p-3 text-left text-sm ${sourceCheckAnswer === answer.id ? 'border-sky-300 bg-sky-500/20 text-white' : 'border-white/10 bg-slate-800 text-slate-200'}`}
+                      >
+                        {answer.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {activeActivityDefinition.type === 'classify' && (
+                <div className="mt-4 space-y-3">
+                  <p className="text-sm text-slate-300">Sort each item. In this example, the recipe and internal plan have not been shared; the advert is already public.</p>
+                  {[
+                    { id: 'recipe', label: 'The bakery’s special recipe' },
+                    { id: 'plan', label: 'The team’s internal project plan' },
+                    { id: 'advertisement', label: 'A product advert on the public website' },
+                  ].map((item) => (
+                    <fieldset key={item.id} className="rounded-xl border border-white/10 bg-slate-800 p-3">
+                      <legend className="px-1 text-sm font-bold">{item.label}</legend>
+                      <div className="mt-2 flex gap-2">
+                        {[
+                          { value: 'private', label: 'Keep private' },
+                          { value: 'public', label: 'Already public' },
+                        ].map((choice) => (
+                          <button
+                            key={choice.value}
+                            type="button"
+                            aria-pressed={vaultClassifications[item.id] === choice.value}
+                            onClick={() => setVaultClassifications((current) => ({ ...current, [item.id]: choice.value }))}
+                            className={`rounded-lg border px-3 py-2 text-xs font-bold ${vaultClassifications[item.id] === choice.value ? 'border-emerald-300 bg-emerald-500/20 text-white' : 'border-white/10 bg-slate-900 text-slate-300'}`}
+                          >
+                            {choice.label}
+                          </button>
+                        ))}
+                      </div>
+                    </fieldset>
+                  ))}
+                </div>
+              )}
+              {activeActivityDefinition.type === 'password' && (
+                <div className="mt-4 space-y-3">
+                  <p className="text-sm text-slate-300">The server needs a passphrase that is long and hard to guess. Choose the strongest example.</p>
+                  {[
+                    { value: 'garden123', label: 'garden123', note: 'Short and easy to guess' },
+                    { value: 'nova2026', label: 'Nova2026!', note: 'Uses a name and a predictable year' },
+                    { value: 'river-cedar-moon', label: 'River!Cedar7Moon', note: 'Longer and less predictable' },
+                  ].map((choice) => (
+                    <button
+                      key={choice.value}
+                      type="button"
+                      aria-pressed={passwordChoice === choice.value}
+                      onClick={() => setPasswordChoice(choice.value)}
+                      className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left ${passwordChoice === choice.value ? 'border-sky-300 bg-sky-500/20' : 'border-white/10 bg-slate-800'}`}
+                    >
+                      <span className="font-mono text-sm font-bold">{choice.label}</span>
+                      <span className="text-right text-xs text-slate-300">{choice.note}</span>
+                    </button>
+                  ))}
+                  <p className="rounded-xl bg-sky-400/10 p-3 text-xs text-sky-100">This is only a game example. Use unique passwords for real accounts, and never share them.</p>
                 </div>
               )}
               {activeActivityDefinition.type === 'sort' && (
@@ -1213,7 +1378,7 @@ export default function Region3DGame({
               <div className="mt-6 flex flex-wrap gap-3">
                 <button type="button" onClick={() => setActiveActivity(null)} className="rounded-xl border border-white/20 px-4 py-3 text-sm font-bold text-slate-200">Cancel</button>
                 <button type="button" onClick={finishActivity} className="rounded-xl bg-sky-500 px-5 py-3 text-sm font-black hover:bg-sky-400">
-                  {activeActivityDefinition.type === 'art' ? 'Save artwork' : activeActivityDefinition.type === 'brand' ? 'Update storefront' : activeActivityDefinition.type === 'document' ? 'Save corrected work' : activeActivityDefinition.type === 'sort' ? 'Save repaired project' : 'Apply access rules'}
+                  {activeActivityDefinition.type === 'art' ? 'Save artwork' : activeActivityDefinition.type === 'brand' ? 'Update storefront' : activeActivityDefinition.type === 'document' ? 'Save corrected work' : activeActivityDefinition.type === 'sort' ? 'Save repaired project' : activeActivityDefinition.type === 'source-check' ? 'Check answer' : activeActivityDefinition.type === 'classify' ? 'Check my choices' : activeActivityDefinition.type === 'password' ? 'Use this passphrase' : 'Apply access rules'}
                 </button>
               </div>
             </section>
@@ -1222,15 +1387,15 @@ export default function Region3DGame({
 
         {(phase === 'tutorial' && tutorialPanelOpen || phase === 'paused' || phase === 'complete') && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm">
-            <section className="w-full max-w-md rounded-2xl border border-white/15 bg-slate-900 p-6 shadow-xl">
+            <section className="max-h-full w-full max-w-md overflow-y-auto rounded-2xl border border-white/15 bg-slate-900 p-6 shadow-xl">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-sky-300">{phase === 'tutorial' ? `Welcome · ${guide}` : phase === 'paused' ? 'Paused' : 'Complete'}</p>
               <h1 className="mt-2 text-2xl font-bold">{phase === 'tutorial' ? title : phase === 'paused' ? 'Take a break' : badge}</h1>
               <p className="mt-3 text-sm leading-6 text-slate-200">{phase === 'tutorial'
                 ? isTouchMode
-                  ? `${intro} Use the joystick to move, drag the scene to look around, and tap E near an object.`
-                  : `${intro} Use WASD to move, drag the scene to look around, and press E near an object.`
+                  ? `${intro} Use the on-screen Move control to walk. Drag the scene to look around, then tap Explore near a glowing object.`
+                  : `${intro} Use W A S D or the arrow keys to walk. Drag the scene to look around, then press E near a glowing object.`
                 : phase === 'paused'
-                  ? 'Your progress is saved as you play. Resume when you are ready.'
+                  ? 'Your progress is saved as you play. Take a break and resume when you are ready.'
                   : description}</p>
               {phase === 'complete' && (
                 <div className="mt-4 rounded-2xl bg-emerald-400/10 p-4">
@@ -1242,14 +1407,18 @@ export default function Region3DGame({
                 </div>
               )}
               {phase === 'tutorial' && (
-                <p className="mt-4 rounded-xl bg-sky-400/10 px-4 py-3 text-sm font-semibold text-sky-100">
-                  {currentMission?.objective}
-                </p>
+                <>
+                  <div className="mt-4 rounded-xl bg-sky-400/10 px-4 py-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-sky-200">Your first task</p>
+                    <p className="mt-1 text-sm font-semibold text-white">{currentMission?.objective}</p>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-300">No timer: take your time. You can pause whenever you need a break.</p>
+                </>
               )}
               <div className="mt-6 flex flex-wrap gap-3">
-                {phase === 'tutorial' && <button type="button" onClick={() => { setPhase('playing'); phaseRef.current = 'playing'; setTutorialPanelOpen(false); setMission(missions[0]?.title ?? mission); setObjective(missions[0]?.objective ?? objective); }} className="rounded-xl bg-sky-500 px-5 py-3 text-sm font-bold hover:bg-sky-400">Start game</button>}
+                {phase === 'tutorial' && <button type="button" onClick={() => { setPhase('playing'); phaseRef.current = 'playing'; setTutorialPanelOpen(false); setMission(missions[0]?.title ?? mission); setObjective(missions[0]?.objective ?? objective); }} className="rounded-xl bg-sky-500 px-5 py-3 text-sm font-bold hover:bg-sky-400">Start mission</button>}
                 {phase === 'paused' && <button type="button" onClick={() => setPhase('playing')} className="rounded-xl bg-sky-500 px-5 py-3 text-sm font-bold">Resume</button>}
-                {phase === 'complete' && <Link href="/games" className="rounded-xl bg-sky-500 px-5 py-3 text-sm font-bold">World map</Link>}
+                {phase === 'complete' && <Link href="/games" className="rounded-xl bg-sky-500 px-5 py-3 text-sm font-bold">Choose another game</Link>}
               </div>
             </section>
           </div>
@@ -1258,7 +1427,7 @@ export default function Region3DGame({
 
       <footer className="relative z-20 flex min-h-12 items-center justify-between gap-3 bg-slate-950/90 px-3 py-2 text-xs text-slate-200 sm:px-6 sm:text-sm">
         <p className="min-w-0 truncate"><span className="font-bold text-sky-200">{guide}:</span> {status}</p>
-        <p className="hidden shrink-0 text-slate-400 sm:block">WASD move · Drag to look · E interact</p>
+        <p className="hidden shrink-0 text-slate-400 sm:block sm:text-xs">{isTouchMode ? 'Move pad · Drag to look · Tap Explore' : 'Move: W A S D / arrows · Look: drag · Explore: E'}</p>
       </footer>
     </main>
   );

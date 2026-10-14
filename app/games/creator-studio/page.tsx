@@ -26,12 +26,12 @@ export default function CreatorStudioPage() {
   return (
     <Region3DGame
       title="CREATOR STUDIO"
-      subtitle="Create, compare, and protect original work"
-      description="Use the creative studio to make original work, compare it with copied material, and organise attribution so everyone receives credit."
+      subtitle="Make art and give creators credit"
+      description="Create a picture, compare it with another artist’s work, and learn how to show who made what."
       accent="from-pink-500 via-rose-500 to-orange-500"
-      mission="Create original work and fix the copied project."
-      intro="A student project is missing attribution. Explore the studio and find the original material."
-      objective="Build an original piece and correct the copied work"
+      mission="Create a picture and give credit where it is needed."
+      intro="A class art project includes work from more than one artist. Explore the studio and find out how to credit each person."
+      objective="Make your own picture"
       objects={creatorObjects}
       missions={creatorMissions}
       guide="Mira, creative mentor"

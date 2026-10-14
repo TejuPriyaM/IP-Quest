@@ -8,46 +8,46 @@ const regions = [
     title: 'Patent Lab',
     icon: '🔬',
     route: '/games/invention-lab',
-    difficulty: 'Beginner',
+    difficulty: 'Build and test',
     accent: 'from-sky-500 via-blue-500 to-blue-700',
-    description: 'Invent, test, and protect new ideas that solve real problems.',
-    mission: 'Build a new invention and decide what protection it may need.',
+    description: 'Help make a water-saving garden machine and see how it works.',
+    mission: 'Find parts, build the machine, and test it.',
   },
   {
     title: 'Creator Studio',
     icon: '🎨',
     route: '/games/creator-studio',
-    difficulty: 'Intermediate',
+    difficulty: 'Make something',
     accent: 'from-pink-500 via-rose-500 to-orange-500',
-    description: 'Create original stories, music, art, and videos that deserve credit.',
-    mission: 'Sort original works from copied ones and check attribution.',
+    description: 'Draw your own picture, compare examples, and give creators credit.',
+    mission: 'Create, compare, and credit artwork.',
   },
   {
     title: 'Brand City',
     icon: '🏙️',
     route: '/games/brand-city',
-    difficulty: 'Intermediate',
+    difficulty: 'Design a shop',
     accent: 'from-violet-500 via-purple-500 to-indigo-600',
-    description: 'Spot logos, slogans, and memorable brands that help us identify products.',
-    mission: 'Recognise strong marks and compare them with common words.',
+    description: 'Design a shop sign that helps customers recognise the shop.',
+    mission: 'Create a name and symbol that stand out.',
   },
   {
     title: 'Secret Vault',
     icon: '🔐',
     route: '/games/secret-vault',
-    difficulty: 'Advanced',
+    difficulty: 'Keep it safe',
     accent: 'from-emerald-500 via-teal-500 to-cyan-700',
-    description: 'Protect confidential business know-how and hidden information.',
-    mission: 'Decide when a secret should stay protected and when it should be shared.',
+    description: 'Choose what should stay private and who needs permission to see it.',
+    mission: 'Keep useful information private and secure.',
   },
   {
     title: 'Originality Academy',
     icon: '📚',
     route: '/games/originality-academy',
-    difficulty: 'Advanced',
+    difficulty: 'School skills',
     accent: 'from-amber-400 via-yellow-500 to-orange-600',
-    description: 'Learn to give credit, cite sources, and stay honest in school work.',
-    mission: 'Compare examples of original work and copied work before submitting.',
+    description: 'Check an assignment against its sources and add credit where it is needed.',
+    mission: 'Compare sources before you decide what to change.',
   },
 ];
 
@@ -95,9 +95,9 @@ export default function IPQuestWorld() {
 
             <div className="mt-5 flex items-center justify-between text-sm font-semibold text-brand-700">
               <span>{progress[region.title.toUpperCase()]?.complete
-                ? `${progress[region.title.toUpperCase()]?.xp ?? 0} XP earned`
-                : `${progress[region.title.toUpperCase()]?.session?.xp ?? 0} XP this run`}</span>
-              <span aria-hidden="true" className="transition group-hover:translate-x-1">{progress[region.title.toUpperCase()]?.complete ? '✓ View badge' : '▶ Play'} →</span>
+                ? `${progress[region.title.toUpperCase()]?.xp ?? 0} points earned`
+                : `${progress[region.title.toUpperCase()]?.session?.xp ?? 0} points so far`}</span>
+              <span aria-hidden="true" className="transition group-hover:translate-x-1">{progress[region.title.toUpperCase()]?.complete ? '✓ See badge' : '▶ Start game'} →</span>
             </div>
           </Link>
         ))}
@@ -109,7 +109,7 @@ export default function IPQuestWorld() {
           <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h3 className="text-2xl font-black sm:text-3xl">The Great IP Mystery</h3>
-              <p className="mt-2 max-w-2xl text-sm text-indigo-100">Explore one startup and investigate its invention, creative work, brand, confidential information, and research.</p>
+              <p className="mt-2 max-w-2xl text-sm text-indigo-100">Explore a small business and learn how it uses an invention, artwork, a brand, private information, and research.</p>
             </div>
             <span className="shrink-0 rounded-xl bg-white px-5 py-3 text-sm font-black text-indigo-800">Play final adventure →</span>
           </div>
@@ -120,20 +120,20 @@ export default function IPQuestWorld() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Quest progress</p>
-            <h3 className="mt-3 text-2xl font-bold text-slate-900">Your IP Guardian journey</h3>
+            <h3 className="mt-3 text-2xl font-bold text-slate-900">Your game progress</h3>
           </div>
           <div className="flex flex-wrap gap-3 text-sm text-slate-600">
-            <span className="rounded-full bg-brand-50 px-3 py-1.5 font-medium text-brand-700">{completedCount}/5 regions complete</span>
-            <span className="rounded-full bg-amber-50 px-3 py-1.5 font-medium text-amber-700">{xpEarned} XP earned</span>
+            <span className="rounded-full bg-brand-50 px-3 py-1.5 font-medium text-brand-700">{completedCount}/5 games complete</span>
+            <span className="rounded-full bg-amber-50 px-3 py-1.5 font-medium text-amber-700">{xpEarned} points earned</span>
             <span className="rounded-full bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700">{completedCount} badges</span>
           </div>
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           {[
-            { label: 'XP earned', value: String(xpEarned), detail: 'Earn XP by completing game actions' },
-            { label: 'Regions cleared', value: `${completedCount}/5`, detail: 'Finish a region to earn its badge' },
-            { label: 'Mission completion', value: `${Math.round((completedCount / regions.length) * 100)}%`, detail: 'Complete every region to become an IP Guardian' },
+            { label: 'Points earned', value: String(xpEarned), detail: 'Earn points by completing game tasks' },
+            { label: 'Games completed', value: `${completedCount}/5`, detail: 'Finish a game to earn its badge' },
+            { label: 'Overall progress', value: `${Math.round((completedCount / regions.length) * 100)}%`, detail: 'Complete all five games to unlock the bonus adventure' },
           ].map((item) => (
             <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">{item.label}</p>

@@ -6,46 +6,51 @@ import { makeMission, type RegionMission, type RegionObject } from '@/components
 const Region3DGame = dynamic(() => import('@/components/Region3DGame').then((mod) => mod.default), { ssr: false });
 
 const academyObjects: RegionObject[] = [
-  { id: 'assignment', label: 'Student Assignment', position: [-8, 0.8, -5], color: '#fbbf24', size: [1.2, 1.1, 1.2], description: 'The assignment under investigation.', kind: 'evidence' },
-  { id: 'source', label: 'Source Book', position: [-2, 0.8, 5], color: '#93c5fd', size: [1, 1, 1], description: 'The original source that should be credited.', kind: 'collect' },
-  { id: 'notes', label: 'Research Notes', position: [5, 0.8, -5], color: '#a5b4fc', size: [1, 1, 1], description: 'Notes showing where copied wording appears.', kind: 'collect' },
-  { id: 'lib', label: 'Library Desk', position: [0, 0.8, 0], color: '#34d399', size: [2.1, 1.2, 2.1], description: 'The place to organise original and cited material.', kind: 'station' },
-  { id: 'report', label: 'Originality Report', position: [8, 0.8, 3], color: '#f9a8d4', size: [1.4, 1.1, 1.4], description: 'A visual report showing original, copied, and attributed work.', kind: 'station' },
-  { id: 'teacher', label: 'Teacher Office', position: [-8, 0.8, 3], color: '#fca5a5', size: [1.4, 1.1, 1.4], description: 'The final submission check with the teacher.', kind: 'station' },
+  { id: 'assignment', label: 'Garden Project Draft', position: [-8, 0.8, -5], color: '#fbbf24', size: [1.2, 1.1, 1.2], description: 'A draft sentence to compare with the research source.', kind: 'evidence' },
+  { id: 'source', label: 'School Garden Guide', position: [-2, 0.8, 5], color: '#93c5fd', size: [1, 1, 1], description: 'The guide the student used for the garden project.', kind: 'collect' },
+  { id: 'notes', label: 'Research Notes', position: [5, 0.8, -5], color: '#a5b4fc', size: [1, 1, 1], description: 'Notes remind the student which garden ideas came from the guide.', kind: 'evidence' },
+  { id: 'lib', label: 'Writing Desk', position: [0, 0.8, 0], color: '#34d399', size: [2.1, 1.2, 2.1], description: 'Revise the draft and add a citation to the source.', kind: 'station' },
+  { id: 'report', label: 'Submission Checklist', position: [8, 0.8, 3], color: '#f9a8d4', size: [1.4, 1.1, 1.4], description: 'Check that ideas from sources are credited and exact words are marked as quotes.', kind: 'station' },
+  { id: 'teacher', label: 'Teacher Submission Desk', position: [-8, 0.8, 3], color: '#fca5a5', size: [1.4, 1.1, 1.4], description: 'Hand in the checked and corrected assignment.', kind: 'station' },
 ];
 
 const academyMissions: RegionMission[] = [
-  makeMission('Review the assignment', 'Open the assignment and find the source material.', ['assignment', 'source'], 'Compare the assignment with the source book and look for similar wording.', 'A source helps you check where an idea or phrase came from.'),
-  makeMission('Check your notes', 'Compare the research notes with the source.', ['notes'], 'Look at the notes and identify which ideas need credit.', 'Noticing borrowed ideas helps keep authorship clear.'),
-  makeMission('Fix and submit', 'Rewrite the assignment, add the source, and submit it.', ['lib', 'report', 'teacher'], 'Revise the copied wording in your own words, cite the source, then submit the report.', 'Plagiarism involves using another person’s work or ideas improperly as your own.'),
+  makeMission('Compare draft and source', 'Check the draft sentence against the School Garden Guide.', ['assignment', 'source'], 'The draft uses a sentence from the guide. Decide how the student can use the source fairly.', 'Direct words need quotation marks and a citation; a paraphrased idea still needs a citation.'),
+  makeMission('Check your research notes', 'Decide whether a paraphrased idea still needs a source.', ['notes'], 'The student wrote the guide’s idea in different words. Choose what to do before handing in the work.', 'A source is still needed when you explain someone else’s idea in your own words.'),
+  makeMission('Revise and cite', 'Write a paraphrase or a correctly marked quote, then cite the guide.', ['lib'], 'Choose a genuine paraphrase or an exact quote in quotation marks. Name the School Garden Guide either way.', 'Ideas from a source need credit, even when you explain them in your own words.'),
+  makeMission('Proofread your assignment', 'Use the submission checklist before handing in your work.', ['report'], 'Check that the guide is credited and any exact words have quotation marks.', 'A final check helps readers tell source material from your own writing.'),
+  makeMission('Hand in your work', 'Submit the corrected assignment to your teacher.', ['teacher'], 'You have checked the draft, revised it, and credited its source. Hand it in.', 'Clear source credit is an important part of honest school work.'),
 ];
-const academyActivities = [{ objectIds: ['lib'], type: 'document' as const }];
+const academyActivities = [
+  { objectIds: ['assignment', 'notes'], type: 'source-check' as const },
+  { objectIds: ['lib'], type: 'document' as const },
+];
 
 export default function OriginalityAcademyPage() {
   return (
     <Region3DGame
       title="ORIGINALITY ACADEMY"
-      subtitle="Find the copied sections and fix the assignment"
-      description="Inspect the assignment, compare source material, add proper attribution, and build an honest originality report before submission."
+      subtitle="Check a source, revise your draft, and give credit"
+      description="Compare a school-garden project with its guide, learn when ideas need a citation, and practice paraphrasing or quoting fairly."
       accent="from-amber-400 via-yellow-500 to-orange-600"
-      mission="Investigate a suspicious assignment and repair the missing citations."
-      intro="The teacher suspects copied material in the student assignment. Explore the school and examine the evidence."
-      objective="Collect the sources and check the assignment for copied material"
+      mission="Help a student prepare an honest garden-project assignment."
+      intro="A student is writing a project about the school garden. Compare the draft with its guide, add credit, and check each step before handing it in."
+      objective="Compare the draft sentence with its source"
       objects={academyObjects}
       missions={academyMissions}
       guide="Ms. Rowan, research mentor"
       badge="Originality Champion"
       environment="school"
       conceptsLearned={[
-        'Compare suspicious text with a source before drawing conclusions.',
-        'Credit borrowed ideas and distinguish them from original work.',
-        'Plagiarism involves improper use of another person’s work or ideas as one’s own.',
+        'Use quotation marks for exact words and cite the source.',
+        'Cite ideas from a source even when you paraphrase them in your own words.',
+        'Check the assignment before handing it in so the reader can tell which ideas came from a source.',
       ]}
       activities={academyActivities}
       onInteract={(item, context) => {
         if (item.kind === 'collect') {
           context.addInventory(item.label);
-          context.setStatus(`${item.label} collected as evidence for your investigation.`);
+          context.setStatus(`${item.label} added to your research materials.`);
           return;
         }
 
@@ -55,17 +60,17 @@ export default function OriginalityAcademyPage() {
         }
 
         if (item.id === 'lib') {
-          context.setStatus('The work is repaired: borrowed ideas are credited and the student’s original ideas are clearly separated.');
+          context.setStatus('The sentence has been revised and the School Garden Guide is named as its source.');
           return;
         }
 
         if (item.id === 'report') {
-          context.setStatus('The report distinguishes original work, copied sections, attributed material, and anything that still needs correction.');
+          context.setStatus('Checklist: the source is named, borrowed ideas are credited, and any exact words appear in quotation marks.');
           return;
         }
 
         if (item.id === 'teacher') {
-          context.setStatus('The corrected assignment is submitted. You have checked the sources and made the authorship clear.');
+          context.setStatus('The checked assignment is handed in with its source credited and the student’s own writing clearly presented.');
         }
       }}
     />

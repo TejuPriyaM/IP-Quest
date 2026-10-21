@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { createQuizJWT } from '@/lib/auth';
+import { notifyDashboardDataChanged } from '@/lib/dashboard-events';
 
 type QuizTopic = {
   id: string;
@@ -183,6 +184,7 @@ export default function LevelQuiz({ topic, initialLevel, onTeacherQuiz }: { topi
         action: 'complete',
         attemptId: activeAttempt.attemptId,
       });
+      notifyDashboardDataChanged();
       setCompletedResult(result);
       setActiveAttempt(null);
       setProgress((current) => current ? {

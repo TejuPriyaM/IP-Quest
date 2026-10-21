@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import Navbar from '@/components/Navbar';
+import ChatbotWidget from '@/components/ChatbotWidget';
 
 export const metadata: Metadata = {
   title: 'IP Quest',
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <Navbar />
         {children}
+        <ChatbotWidget />
       </body>
     </html>
   );

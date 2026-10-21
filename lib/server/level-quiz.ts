@@ -4,6 +4,7 @@ import { randomInt } from 'node:crypto';
 import { Account, Client, ID, Query, TablesDB, type Models } from 'node-appwrite';
 import { getLearnModuleBySlug } from '@/lib/learn';
 import { appwriteConfig } from '@/lib/appwrite';
+import { isTeacherTeamMember } from '@/lib/server/teachers';
 import { QUIZ_LEVEL_COUNT, QUIZ_PASS_PERCENTAGE, QUIZ_QUESTIONS_PER_LEVEL } from '@/lib/server/quiz-config';
 
 const questionsTableId = 'questions';
@@ -65,6 +66,7 @@ type PerformanceHistoryEntry = {
   percentage: number;
   completedAt: string;
 } & (
+  | { kind: 'quiz' }
   | { kind: 'level'; level: number; passed: boolean }
   | { kind: 'teacher'; passed: boolean }
   | { kind: 'assessment'; lessonId: string; lessonTitle: string }
@@ -153,15 +155,25 @@ export async function verifyQuizRole(jwt: string, requiredRole: 'student' | 'tea
     throw new LevelQuizError(`Unable to authenticate the quiz request.${getDevelopmentErrorDetails(error)}`, 500);
   }
 
+  let isTeacher: boolean;
   try {
-    const profile = await new TablesDB(jwtClient).getRow<Models.Row & { role?: unknown }>({
+    isTeacher = await isTeacherTeamMember(jwt.trim());
+  } catch {
+    throw new LevelQuizError('Unable to verify teacher access.', 500);
+  }
+  if (requiredRole === 'teacher' && !isTeacher) {
+    throw new LevelQuizError('Teacher team membership is required for this operation.', 403);
+  }
+  if (requiredRole === 'student' && isTeacher) {
+    throw new LevelQuizError('This operation is only available to student accounts.', 403);
+  }
+
+  try {
+    await new TablesDB(jwtClient).getRow<Models.Row>({
       databaseId: getDatabaseId(),
       tableId: profilesTableId,
       rowId: user.$id,
     });
-    if (profile.role !== requiredRole) {
-      throw new LevelQuizError(`Only ${requiredRole} accounts can use this quiz operation.`, 403);
-    }
   } catch (error) {
     if (error instanceof LevelQuizError) throw error;
     if (getErrorCode(error) === 401 || getErrorCode(error) === 403) {
@@ -414,6 +426,23 @@ async function getAttemptRows(userId: string, topicId?: string) {
   return rows;
 }
 
+function getLessonAssessmentId(attempt: QuizAttempt) {
+  if (typeof attempt.lesson_id === 'string' && attempt.lesson_id.trim()) return attempt.lesson_id;
+  if (typeof attempt.responses !== 'string') return null;
+
+  try {
+    const metadata: unknown = JSON.parse(attempt.responses);
+    if (typeof metadata !== 'object' || metadata === null) return null;
+    const record = metadata as Record<string, unknown>;
+    return record.version === 1 && record.kind === 'lesson_assessment' &&
+      typeof record.lessonId === 'string' && record.lessonId.trim()
+      ? record.lessonId
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function passedLevels(attempts: QuizAttempt[]) {
   return new Set(attempts
     .filter((attempt) => attempt.status === 'completed' && attempt.passed === true && Number.isInteger(attempt.level))
@@ -448,14 +477,19 @@ export async function getLevelQuizProgress(jwt: string, topicId: string) {
   };
 }
 
-export async function getStudentPerformanceHistory(jwt: string) {
-  const user = await verifyQuizStudent(jwt);
-  const attempts = (await getAttemptRows(user.$id)).filter((attempt) =>
-    attempt.total_questions > 0 && Number.isInteger(attempt.score) && typeof attempt.completed_at === 'string',
+export async function getQuizPerformanceHistoryForUserId(userId: string, mappingJwt?: string) {
+  if (!userId.trim()) throw new LevelQuizError('A valid student is required.', 400);
+  const attempts = (await getAttemptRows(userId)).filter((attempt) =>
+    Number.isInteger(attempt.total_questions) &&
+    attempt.total_questions > 0 &&
+    Number.isInteger(attempt.score) &&
+    attempt.score >= 0 &&
+    attempt.score <= attempt.total_questions &&
+    typeof attempt.completed_at === 'string',
   );
   const topicIds = Array.from(new Set(attempts.map((attempt) => attempt.topic_id)));
-  const lessonIds = Array.from(new Set(attempts.map((attempt) => attempt.lesson_id).filter((lessonId): lessonId is string => Boolean(lessonId))));
-  const tablesDb = getJwtTables(jwt);
+  const lessonIds = Array.from(new Set(attempts.map(getLessonAssessmentId).filter((lessonId): lessonId is string => Boolean(lessonId))));
+  const tablesDb = mappingJwt ? getJwtTables(mappingJwt) : getPrivilegedTables();
 
   const [topicRows, lessonRows] = await Promise.all([
     Promise.all(topicIds.map(async (topicId) => {
@@ -477,7 +511,8 @@ export async function getStudentPerformanceHistory(jwt: string) {
   const lessonTitles = new Map(lessonRows.filter((row): row is Models.Row & { title?: string } => row !== null).map((row) => [row.$id, row.title ?? 'Lesson assessment']));
 
   const history = attempts.reduce<PerformanceHistoryEntry[]>((entries, attempt) => {
-      if (attempt.status !== 'completed' && !attempt.lesson_id) return entries;
+      const lessonId = getLessonAssessmentId(attempt);
+      if (attempt.status !== 'completed' && !lessonId) return entries;
       const common = {
         attemptId: attempt.$id,
         topicId: attempt.topic_id,
@@ -487,23 +522,31 @@ export async function getStudentPerformanceHistory(jwt: string) {
         percentage: Math.round((attempt.score / attempt.total_questions) * 100),
         completedAt: attempt.completed_at,
       };
-      if (attempt.lesson_id) {
-        entries.push({ ...common, kind: 'assessment', lessonId: attempt.lesson_id, lessonTitle: lessonTitles.get(attempt.lesson_id) ?? 'Lesson assessment' });
+      if (lessonId) {
+        entries.push({ ...common, kind: 'assessment', lessonId, lessonTitle: lessonTitles.get(lessonId) ?? 'Lesson assessment' });
         return entries;
       }
       if (Number.isInteger(attempt.level)) {
         entries.push({ ...common, kind: 'level', level: attempt.level as number, passed: attempt.passed === true });
       } else if (attempt.status === 'completed') {
         entries.push({ ...common, kind: 'teacher', passed: attempt.passed === true });
+      } else if (!attempt.status) {
+        entries.push({ ...common, kind: 'quiz' });
       }
       return entries;
     }, []).sort((first, second) => new Date(first.completedAt).getTime() - new Date(second.completedAt).getTime());
 
   return {
+    quizAttempts: history.filter((attempt) => attempt.kind === 'quiz'),
     levelAttempts: history.filter((attempt) => attempt.kind === 'level'),
     teacherQuizAttempts: history.filter((attempt) => attempt.kind === 'teacher'),
     lessonAssessments: history.filter((attempt) => attempt.kind === 'assessment'),
   };
+}
+
+export async function getStudentPerformanceHistory(jwt: string) {
+  const user = await verifyQuizStudent(jwt);
+  return getQuizPerformanceHistoryForUserId(user.$id, jwt);
 }
 
 export async function startOrResumeLevel(jwt: string, topicId: string, level: number) {

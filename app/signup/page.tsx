@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createAccount, createCurrentUserJWT, getCurrentDestination, login, type UserRole } from '@/lib/auth';
+import { createAccount, getCurrentDestination, login } from '@/lib/auth';
 import { createProfile } from '@/lib/profile';
 
 export default function SignupPage() {
@@ -12,7 +12,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState<Extract<UserRole, 'student' | 'teacher'>>('student');
+  const [selectedRole, setSelectedRole] = useState<'student' | 'teacher' | ''>('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -40,23 +40,17 @@ export default function SignupPage() {
       return;
     }
 
+    if (selectedRole !== 'student' && selectedRole !== 'teacher') {
+      setError('Please select Student or Teacher.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const user = await createAccount({ name: name.trim(), email: email.trim(), password });
+      await createAccount({ name: name.trim(), email: email.trim(), password });
       await login({ email: email.trim(), password });
-      await createProfile({ userId: user.$id, displayName: name.trim(), role: selectedRole });
-      const jwt = await createCurrentUserJWT();
-
-      const membershipResponse = await fetch('/api/teachers/membership', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.$id, role: selectedRole }),
-      });
-
-      if (!membershipResponse.ok) {
-        throw new Error(selectedRole === 'teacher' ? 'Teacher account setup could not be completed. Please contact support before trying again.' : 'Account setup could not be completed. Please try again.');
-      }
+      await createProfile({ displayName: name.trim(), role: selectedRole });
 
       const destination = await getCurrentDestination();
       router.replace(destination ?? '/login');
@@ -80,17 +74,6 @@ export default function SignupPage() {
             <label htmlFor="name" className="mb-2 block text-sm font-semibold text-slate-700">Display name</label>
             <input id="name" type="text" autoComplete="name" required value={name} onChange={(event) => setName(event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
           </div>
-          <fieldset>
-            <legend className="mb-2 block text-sm font-semibold text-slate-700">Role</legend>
-            <div className="grid grid-cols-2 gap-3">
-              {(['student', 'teacher'] as const).map((role) => (
-                <label key={role} className={`cursor-pointer rounded-xl border px-4 py-3 text-center text-sm font-semibold capitalize transition ${selectedRole === role ? 'border-brand-600 bg-brand-50 text-brand-700 ring-2 ring-brand-100' : 'border-slate-300 text-slate-600 hover:border-brand-300'}`}>
-                  <input type="radio" name="signup-role" value={role} checked={selectedRole === role} onChange={() => setSelectedRole(role)} className="sr-only" />
-                  {role}
-                </label>
-              ))}
-            </div>
-          </fieldset>
           <div>
             <label htmlFor="email" className="mb-2 block text-sm font-semibold text-slate-700">Email</label>
             <input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
@@ -103,6 +86,26 @@ export default function SignupPage() {
             <label htmlFor="confirm-password" className="mb-2 block text-sm font-semibold text-slate-700">Confirm password</label>
             <input id="confirm-password" type="password" autoComplete="new-password" required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
           </div>
+          <fieldset>
+            <legend className="mb-2 block text-sm font-semibold text-slate-700">I am joining as <span className="text-rose-600">*</span></legend>
+            <div className="grid grid-cols-2 gap-3">
+              {(['student', 'teacher'] as const).map((role) => (
+                <label key={role} className={`cursor-pointer rounded-xl border px-4 py-3 text-center text-sm font-semibold capitalize transition ${selectedRole === role ? 'border-brand-600 bg-brand-50 text-brand-700 ring-2 ring-brand-100' : 'border-slate-300 text-slate-600 hover:border-brand-300'}`}>
+                  <input
+                    type="radio"
+                    name="signup-role"
+                    value={role}
+                    checked={selectedRole === role}
+                    required
+                    onChange={() => setSelectedRole(role)}
+                    className="sr-only"
+                  />
+                  {role}
+                </label>
+              ))}
+            </div>
+            {selectedRole === 'teacher' && <p className="mt-2 text-xs leading-5 text-slate-500">Teacher tools require separate approval. Selecting Teacher does not grant access.</p>}
+          </fieldset>
           {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
           <button type="submit" disabled={isSubmitting} className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60">
             {isSubmitting ? 'Creating account...' : 'Create account'}

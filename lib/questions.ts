@@ -1,6 +1,4 @@
-import { Query, TablesDB, type Models } from 'appwrite';
 import { createCurrentUserJWT } from '@/lib/auth';
-import { getAppwriteClient, getAppwriteDatabaseId } from '@/lib/appwrite';
 
 export const questionsTableId = 'questions';
 
@@ -21,24 +19,11 @@ export type Question = {
 export type QuestionInput = Omit<Question, '$id'>;
 export type QuestionKind = 'learn-level' | 'teacher-quiz' | 'lesson-assessment' | 'teacher-assessment';
 
-type QuestionRow = Models.Row & Question;
-
 export class QuestionError extends Error {
 	constructor(message: string) {
 		super(message);
 		this.name = 'QuestionError';
 	}
-}
-
-function getTablesDb() {
-	const client = getAppwriteClient();
-	const databaseId = getAppwriteDatabaseId();
-
-	if (!client || !databaseId) {
-		throw new QuestionError('Question storage is not configured yet. Please try again later.');
-	}
-
-	return { databaseId, tablesDb: new TablesDB(client) };
 }
 
 function getErrorCode(error: unknown) {
@@ -57,6 +42,22 @@ function getOperationError(error: unknown, operation: 'list' | 'get' | 'create' 
 	}
 
 	return new QuestionError(`Unable to ${operation} question${operation === 'list' ? 's' : ''}. Please try again.`);
+}
+
+async function getTeacherQuestions(parameters: Record<string, string> = {}) {
+	const jwt = await createCurrentUserJWT();
+	const query = new URLSearchParams(parameters);
+	const response = await fetch(`/api/teacher/questions${query.size ? `?${query.toString()}` : ''}`, {
+		headers: { Authorization: `Bearer ${jwt}` },
+	});
+	const payload: unknown = await response.json().catch(() => null);
+	if (!response.ok) {
+		const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+			? payload.error
+			: 'Unable to load teacher questions.';
+		throw new QuestionError(message);
+	}
+	return payload;
 }
 
 export function validateQuestionInput(data: QuestionInput, kind?: QuestionKind) {
@@ -168,22 +169,11 @@ async function saveQuestion(method: 'POST' | 'PATCH', body: Record<string, unkno
 
 export async function listQuestions(): Promise<Question[]> {
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-		const questions: Question[] = [];
-		let cursor: string | undefined;
-
-		while (true) {
-			const response = await tablesDb.listRows<QuestionRow>({
-				databaseId,
-				tableId: questionsTableId,
-				queries: [Query.limit(100), ...(cursor ? [Query.cursorAfter(cursor)] : [])],
-			});
-			questions.push(...response.rows);
-			if (response.rows.length < 100) break;
-			cursor = response.rows[response.rows.length - 1].$id;
+		const payload = await getTeacherQuestions();
+		if (typeof payload !== 'object' || payload === null || !('questions' in payload) || !Array.isArray(payload.questions)) {
+			throw new QuestionError('The teacher questions response was invalid.');
 		}
-
-		return questions;
+		return payload.questions as Question[];
 	} catch (error) {
 		throw getOperationError(error, 'list');
 	}
@@ -193,13 +183,11 @@ export async function getQuestion(id: string): Promise<Question> {
 	validateQuestionId(id);
 
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-
-		return await tablesDb.getRow<QuestionRow>({
-			databaseId,
-			tableId: questionsTableId,
-			rowId: id,
-		});
+		const payload = await getTeacherQuestions({ questionId: id });
+		if (typeof payload !== 'object' || payload === null || !('question' in payload)) {
+			throw new QuestionError('The teacher question response was invalid.');
+		}
+		return payload.question as Question;
 	} catch (error) {
 		throw getOperationError(error, 'get');
 	}
@@ -211,14 +199,11 @@ export async function listQuestionsByTopic(topicId: string): Promise<Question[]>
 	}
 
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-		const response = await tablesDb.listRows<QuestionRow>({
-			databaseId,
-			tableId: questionsTableId,
-			queries: [Query.equal('topic_id', topicId)],
-		});
-
-		return response.rows;
+		const payload = await getTeacherQuestions({ topicId });
+		if (typeof payload !== 'object' || payload === null || !('questions' in payload) || !Array.isArray(payload.questions)) {
+			throw new QuestionError('The teacher questions response was invalid.');
+		}
+		return payload.questions as Question[];
 	} catch (error) {
 		throw getOperationError(error, 'list');
 	}
@@ -230,14 +215,11 @@ export async function listPublishedQuestionsByTopic(topicId: string): Promise<Qu
 	}
 
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-		const response = await tablesDb.listRows<QuestionRow>({
-			databaseId,
-			tableId: questionsTableId,
-			queries: [Query.equal('topic_id', topicId), Query.equal('is_published', true)],
-		});
-
-		return response.rows;
+		const payload = await getTeacherQuestions({ topicId });
+		if (typeof payload !== 'object' || payload === null || !('questions' in payload) || !Array.isArray(payload.questions)) {
+			throw new QuestionError('The teacher questions response was invalid.');
+		}
+		return (payload.questions as Question[]).filter((question) => question.is_published);
 	} catch (error) {
 		throw getOperationError(error, 'list');
 	}

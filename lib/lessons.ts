@@ -1,5 +1,4 @@
-import { ID, Query, TablesDB, type Models } from 'appwrite';
-import { getAppwriteClient, getAppwriteDatabaseId } from '@/lib/appwrite';
+import { createQuizJWT } from '@/lib/auth';
 
 export const lessonsTableId = 'lessons';
 
@@ -15,24 +14,11 @@ export type Lesson = {
 
 export type LessonInput = Omit<Lesson, '$id'>;
 
-type LessonRow = Models.Row & Lesson;
-
 export class LessonError extends Error {
 	constructor(message: string) {
 		super(message);
 		this.name = 'LessonError';
 	}
-}
-
-function getTablesDb() {
-	const client = getAppwriteClient();
-	const databaseId = getAppwriteDatabaseId();
-
-	if (!client || !databaseId) {
-		throw new LessonError('Lesson storage is not configured yet. Please try again later.');
-	}
-
-	return { databaseId, tablesDb: new TablesDB(client) };
 }
 
 function getErrorCode(error: unknown) {
@@ -54,25 +40,43 @@ function getOperationError(error: unknown, operation: 'load' | 'create' | 'updat
 }
 
 export async function listLessons(): Promise<Lesson[]> {
-	try {
-		const { databaseId, tablesDb } = getTablesDb();
-		const response = await tablesDb.listRows<LessonRow>({ databaseId, tableId: lessonsTableId });
+	return listTeacherLessons();
+}
 
-		return response.rows;
-	} catch (error) {
-		throw getOperationError(error, 'load');
+async function teacherLessonRequest(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: Record<string, unknown>) {
+	const jwt = await createQuizJWT();
+	const response = await fetch('/api/teacher/lessons', {
+		method,
+		headers: { Authorization: `Bearer ${jwt}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+		...(body ? { body: JSON.stringify(body) } : {}),
+	});
+	const payload: unknown = await response.json().catch(() => null);
+	if (!response.ok) {
+		const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+			? payload.error
+			: 'Unable to access teacher lessons.';
+		throw new LessonError(message);
 	}
+	return payload;
+}
+
+export async function listTeacherLessons(): Promise<Lesson[]> {
+	const payload = await teacherLessonRequest('GET');
+	if (typeof payload !== 'object' || payload === null || !('lessons' in payload) || !Array.isArray(payload.lessons)) {
+		throw new LessonError('The teacher lessons response was invalid.');
+	}
+	return payload.lessons as Lesson[];
 }
 
 export async function getLesson(id: string): Promise<Lesson> {
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-
-		return await tablesDb.getRow<LessonRow>({
-			databaseId,
-			tableId: lessonsTableId,
-			rowId: id,
-		});
+		const query = new URLSearchParams({ resource: 'lessons', lessonId: id });
+		const response = await fetch(`/api/learn/content?${query.toString()}`);
+		const payload: unknown = await response.json().catch(() => null);
+		if (!response.ok || typeof payload !== 'object' || payload === null || !('lesson' in payload)) {
+			throw new LessonError('Unable to load this published lesson.');
+		}
+		return payload.lesson as Lesson;
 	} catch (error) {
 		throw getOperationError(error, 'load');
 	}
@@ -80,14 +84,13 @@ export async function getLesson(id: string): Promise<Lesson> {
 
 export async function listLessonsByTopic(topicId: string): Promise<Lesson[]> {
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-		const response = await tablesDb.listRows<LessonRow>({
-			databaseId,
-			tableId: lessonsTableId,
-			queries: [Query.equal('topic_id', topicId), Query.orderAsc('order_index')],
-		});
-
-		return response.rows;
+		const query = new URLSearchParams({ resource: 'lessons', topicId });
+		const response = await fetch(`/api/learn/content?${query.toString()}`);
+		const payload: unknown = await response.json().catch(() => null);
+		if (!response.ok || typeof payload !== 'object' || payload === null || !('lessons' in payload) || !Array.isArray(payload.lessons)) {
+			throw new LessonError('Unable to load published lessons.');
+		}
+		return payload.lessons as Lesson[];
 	} catch (error) {
 		throw getOperationError(error, 'load');
 	}
@@ -95,14 +98,7 @@ export async function listLessonsByTopic(topicId: string): Promise<Lesson[]> {
 
 export async function createLesson(data: LessonInput): Promise<Lesson> {
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-
-		return await tablesDb.createRow<LessonRow>({
-			databaseId,
-			tableId: lessonsTableId,
-			rowId: ID.unique(),
-			data,
-		});
+		return await teacherLessonRequest('POST', { lesson: data }) as Lesson;
 	} catch (error) {
 		throw getOperationError(error, 'create');
 	}
@@ -110,14 +106,7 @@ export async function createLesson(data: LessonInput): Promise<Lesson> {
 
 export async function updateLesson(id: string, data: LessonInput): Promise<Lesson> {
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-
-		return await tablesDb.updateRow<LessonRow>({
-			databaseId,
-			tableId: lessonsTableId,
-			rowId: id,
-			data,
-		});
+		return await teacherLessonRequest('PATCH', { lessonId: id, lesson: data }) as Lesson;
 	} catch (error) {
 		throw getOperationError(error, 'update');
 	}
@@ -125,13 +114,7 @@ export async function updateLesson(id: string, data: LessonInput): Promise<Lesso
 
 export async function deleteLesson(id: string): Promise<void> {
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-
-		await tablesDb.deleteRow({
-			databaseId,
-			tableId: lessonsTableId,
-			rowId: id,
-		});
+		await teacherLessonRequest('DELETE', { lessonId: id });
 	} catch (error) {
 		throw getOperationError(error, 'delete');
 	}

@@ -1,6 +1,5 @@
-import { ID, TablesDB, type Models } from 'appwrite';
+import type { Models } from 'appwrite';
 import { createQuizJWT } from '@/lib/auth';
-import { getAppwriteClient, getAppwriteDatabaseId } from '@/lib/appwrite';
 
 export const topicsTableId = 'topics';
 
@@ -20,17 +19,6 @@ export class TopicError extends Error {
 		super(message);
 		this.name = 'TopicError';
 	}
-}
-
-function getTablesDb() {
-	const client = getAppwriteClient();
-	const databaseId = getAppwriteDatabaseId();
-
-	if (!client || !databaseId) {
-		throw new TopicError('Topic storage is not configured yet. Please try again later.');
-	}
-
-	return { databaseId, tablesDb: new TablesDB(client) };
 }
 
 function getErrorCode(error: unknown) {
@@ -53,13 +41,40 @@ function getOperationError(error: unknown, operation: 'load' | 'create' | 'updat
 
 export async function listTopics(): Promise<TopicRow[]> {
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-		const response = await tablesDb.listRows<TopicRow>({ databaseId, tableId: topicsTableId });
-
-		return response.rows;
+		const response = await fetch('/api/learn/content?resource=topics');
+		const payload: unknown = await response.json().catch(() => null);
+		if (!response.ok || typeof payload !== 'object' || payload === null || !('topics' in payload) || !Array.isArray(payload.topics)) {
+			throw new TopicError('Unable to load published topics.');
+		}
+		return payload.topics as TopicRow[];
 	} catch (error) {
 		throw getOperationError(error, 'load');
 	}
+}
+
+async function teacherTopicRequest(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: Record<string, unknown>) {
+	const jwt = await createQuizJWT();
+	const response = await fetch('/api/teacher/topics', {
+		method,
+		headers: { Authorization: `Bearer ${jwt}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+		...(body ? { body: JSON.stringify(body) } : {}),
+	});
+	const payload: unknown = await response.json().catch(() => null);
+	if (!response.ok) {
+		const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+			? payload.error
+			: 'Unable to access teacher topics.';
+		throw new TopicError(message);
+	}
+	return payload;
+}
+
+export async function listTeacherTopics(): Promise<TopicRow[]> {
+	const payload = await teacherTopicRequest('GET');
+	if (typeof payload !== 'object' || payload === null || !('topics' in payload) || !Array.isArray(payload.topics)) {
+		throw new TopicError('The teacher topics response was invalid.');
+	}
+	return payload.topics as TopicRow[];
 }
 
 export async function listPublishedLearnTopics(): Promise<TopicRow[]> {
@@ -86,14 +101,7 @@ export async function listPublishedLearnTopics(): Promise<TopicRow[]> {
 
 export async function createTopic(topic: Topic): Promise<TopicRow> {
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-
-		return await tablesDb.createRow<TopicRow>({
-			databaseId,
-			tableId: topicsTableId,
-			rowId: ID.unique(),
-			data: topic,
-		});
+		return await teacherTopicRequest('POST', { topic }) as TopicRow;
 	} catch (error) {
 		throw getOperationError(error, 'create');
 	}
@@ -101,14 +109,7 @@ export async function createTopic(topic: Topic): Promise<TopicRow> {
 
 export async function updateTopic(rowId: string, topic: Topic): Promise<TopicRow> {
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-
-		return await tablesDb.updateRow<TopicRow>({
-			databaseId,
-			tableId: topicsTableId,
-			rowId,
-			data: topic,
-		});
+		return await teacherTopicRequest('PATCH', { topicId: rowId, topic }) as TopicRow;
 	} catch (error) {
 		throw getOperationError(error, 'update');
 	}
@@ -116,13 +117,7 @@ export async function updateTopic(rowId: string, topic: Topic): Promise<TopicRow
 
 export async function deleteTopic(rowId: string): Promise<void> {
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-
-		await tablesDb.deleteRow({
-			databaseId,
-			tableId: topicsTableId,
-			rowId,
-		});
+		await teacherTopicRequest('DELETE', { topicId: rowId });
 	} catch (error) {
 		throw getOperationError(error, 'delete');
 	}

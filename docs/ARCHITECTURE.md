@@ -28,8 +28,10 @@
 
 ## AI
 
-- OpenRouter through server-side API calls
-- Future provider abstraction for Groq and Hugging Face
+- OpenRouter through the server-side `/api/chat` route
+- Role and page context are validated server-side; only published learning material is retrieved for student Learn pages
+- Teacher chat does not retrieve student records
+- `OPENROUTER_API_KEY` remains server-only; `OPENROUTER_MODEL` selects the configured model
 
 ## Deployment
 

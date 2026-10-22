@@ -2,8 +2,8 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
-import { listTopics, type TopicRow } from '@/lib/topics';
-import { createLesson, deleteLesson, listLessons, type Lesson, type LessonInput, updateLesson } from '@/lib/lessons';
+import { listTeacherTopics, type TopicRow } from '@/lib/topics';
+import { createLesson, deleteLesson, listTeacherLessons, type Lesson, type LessonInput, updateLesson } from '@/lib/lessons';
 
 const emptyLesson: LessonInput = {
   topic_id: '',
@@ -43,7 +43,7 @@ export default function TeacherLessonsPage() {
     setLoadError('');
 
     try {
-      const [topicRows, lessonRows] = await Promise.all([listTopics(), listLessons()]);
+      const [topicRows, lessonRows] = await Promise.all([listTeacherTopics(), listTeacherLessons()]);
       setTopics(topicRows);
       setLessons(lessonRows);
     } catch (error) {

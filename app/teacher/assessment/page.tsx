@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import { createQuestion, deleteQuestion, listQuestions, type Question, type QuestionInput, updateQuestion } from '@/lib/questions';
-import { listTopics, type TopicRow } from '@/lib/topics';
+import { listTeacherTopics, type TopicRow } from '@/lib/topics';
 
 const difficultyOptions = ['Beginner', 'Intermediate', 'Advanced'];
 
@@ -55,7 +55,7 @@ export default function TeacherAssessmentPage() {
     setLoadError('');
 
     try {
-      const [topicRows, questionRows] = await Promise.all([listTopics(), listQuestions()]);
+      const [topicRows, questionRows] = await Promise.all([listTeacherTopics(), listQuestions()]);
       setTopics(topicRows);
       setQuestions(questionRows.filter((question) => question.level !== null && question.level !== undefined && !question.lesson_id && question.options.length === 0));
 

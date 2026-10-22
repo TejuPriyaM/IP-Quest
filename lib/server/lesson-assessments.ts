@@ -271,17 +271,26 @@ export async function submitLessonAssessment(
   const completedAt = new Date().toISOString();
   let attempt: Models.Row;
   try {
-    attempt = await getPrivilegedTables().createRow<Models.Row & { user_id: string; topic_id: string; lesson_id: string; score: number; total_questions: number; completed_at: string }>({
+    attempt = await getPrivilegedTables().createRow<Models.Row & {
+      user_id: string;
+      topic_id: string;
+      score: number;
+      total_questions: number;
+      completed_at: string;
+      status: string;
+      responses: string;
+    }>({
       databaseId: getDatabaseId(),
       tableId: quizAttemptsTableId,
       rowId: ID.unique(),
       data: {
         user_id: user.$id,
         topic_id: topicId,
-        lesson_id: lessonId,
         score,
         total_questions: questions.length,
         completed_at: completedAt,
+        status: 'completed',
+        responses: JSON.stringify({ version: 1, kind: 'lesson_assessment', lessonId }),
       },
     });
   } catch {

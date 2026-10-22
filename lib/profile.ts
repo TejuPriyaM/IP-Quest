@@ -1,10 +1,10 @@
 import { TablesDB, type Models } from 'appwrite';
+import { createCurrentUserJWT } from '@/lib/auth';
 import { getAppwriteClient, getAppwriteDatabaseId } from '@/lib/appwrite';
 
 const profilesTableId = 'profiles';
 
 export type CreateProfileInput = {
-	userId: string;
 	displayName: string;
 	role: 'student' | 'teacher';
 };
@@ -37,21 +37,25 @@ function getTablesDb() {
 	return { databaseId, tablesDb: new TablesDB(client) };
 }
 
-export async function createProfile({ userId, displayName, role }: CreateProfileInput): Promise<Models.Row> {
+export async function createProfile({ displayName, role }: CreateProfileInput): Promise<Models.Row> {
 	try {
-		const { databaseId, tablesDb } = getTablesDb();
-
-		return await tablesDb.createRow<Models.DefaultRow>({
-			databaseId,
-			tableId: profilesTableId,
-			rowId: userId,
-			data: {
-				user_id: userId,
-				display_name: displayName,
-				role,
-				created_at: new Date().toISOString(),
-			},
+		const jwt = await createCurrentUserJWT();
+		const response = await fetch('/api/auth/profile', {
+			method: 'POST',
+			headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+			body: JSON.stringify({ displayName, role }),
 		});
+		const payload: unknown = await response.json().catch(() => null);
+		if (!response.ok) {
+			const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+				? payload.error
+				: 'Unable to create your profile. Please try again.';
+			throw new ProfileError(message);
+		}
+		if (typeof payload !== 'object' || payload === null || !('profile' in payload)) {
+			throw new ProfileError('The profile creation response was invalid.');
+		}
+		return payload.profile as Models.Row;
 	} catch (error) {
 		const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
 

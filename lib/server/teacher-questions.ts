@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Client, ID, TablesDB, type Models } from 'node-appwrite';
+import { Client, ID, Query, TablesDB, type Models } from 'node-appwrite';
 import { appwriteConfig } from '@/lib/appwrite';
 import { getLearnModuleBySlug } from '@/lib/learn';
 import { QuestionError, validateQuestionInput, type QuestionInput, type QuestionKind } from '@/lib/questions';
@@ -33,9 +33,12 @@ function getDatabaseId() {
   return appwriteConfig.databaseId;
 }
 
-function getJwtTables(jwt: string) {
-  const client = new Client().setEndpoint(appwriteConfig.endpoint).setProject(appwriteConfig.projectId).setJWT(jwt);
-  return new TablesDB(client);
+function getPrivilegedTables() {
+  const apiKey = process.env.APPWRITE_QUIZ_API_KEY?.trim();
+  if (!apiKey || !appwriteConfig.endpoint || !appwriteConfig.projectId) {
+    throw new TeacherQuestionError('Server-side question access is not configured.', 500);
+  }
+  return new TablesDB(new Client().setEndpoint(appwriteConfig.endpoint).setProject(appwriteConfig.projectId).setKey(apiKey));
 }
 
 function getQuestionKind(question: Partial<Pick<QuestionInput, 'lesson_id' | 'level' | 'options' | 'correct_option'>>): QuestionKind {
@@ -86,8 +89,8 @@ function parseQuestionInput(value: unknown, kind?: QuestionKind): QuestionInput 
   return question;
 }
 
-async function verifyQuestionRelationship(jwt: string, question: QuestionInput) {
-  const tablesDb = getJwtTables(jwt);
+async function verifyQuestionRelationship(question: QuestionInput) {
+  const tablesDb = getPrivilegedTables();
   const lessonId = question.lesson_id?.trim() ?? '';
   let topic: Models.Row & { title?: string; slug?: string; is_published?: boolean };
   try {
@@ -128,20 +131,79 @@ async function verifyTeacher(jwt: string) {
   }
 }
 
+function sanitizeQuestion(question: QuestionRow): QuestionInput & { $id: string } {
+  return {
+    $id: question.$id,
+    topic_id: question.topic_id,
+    lesson_id: question.lesson_id ?? null,
+    question_text: question.question_text,
+    options: question.options,
+    correct_option: question.correct_option,
+    explanation: question.explanation,
+    difficulty: question.difficulty,
+    is_published: question.is_published,
+    level: question.level ?? null,
+    hint: question.hint ?? null,
+  };
+}
+
+export async function listTeacherQuestions(jwt: string, topicId?: string) {
+  await verifyTeacher(jwt);
+  const databaseId = getDatabaseId();
+  const rows: QuestionRow[] = [];
+  let cursor: string | undefined;
+  try {
+    while (true) {
+      const response = await getPrivilegedTables().listRows<QuestionRow>({
+        databaseId,
+        tableId: questionsTableId,
+        queries: [
+          ...(topicId?.trim() ? [Query.equal('topic_id', topicId.trim())] : []),
+          Query.limit(100),
+          ...(cursor ? [Query.cursorAfter(cursor)] : []),
+        ],
+      });
+      rows.push(...response.rows);
+      if (response.rows.length < 100) break;
+      cursor = response.rows[response.rows.length - 1].$id;
+    }
+    return rows.map(sanitizeQuestion);
+  } catch {
+    throw new TeacherQuestionError('Unable to list teacher questions.', 500);
+  }
+}
+
+export async function getTeacherQuestion(jwt: string, questionId: string) {
+  await verifyTeacher(jwt);
+  if (!questionId.trim()) throw new TeacherQuestionError('A valid question ID is required.', 400);
+  try {
+    const question = await getPrivilegedTables().getRow<QuestionRow>({
+      databaseId: getDatabaseId(),
+      tableId: questionsTableId,
+      rowId: questionId.trim(),
+    });
+    return sanitizeQuestion(question);
+  } catch (error) {
+    if (getErrorCode(error) === 404) throw new TeacherQuestionError('The question was not found.', 404);
+    throw new TeacherQuestionError('Unable to load the teacher question.', 500);
+  }
+}
+
 export async function createTeacherQuestion(jwt: string, value: unknown, kind?: QuestionKind) {
   await verifyTeacher(jwt);
   const question = parseQuestionInput(value, kind);
   if (kind && getQuestionKind(question) !== kind) {
     throw new TeacherQuestionError('The question fields do not match the selected question type.', 400);
   }
-  await verifyQuestionRelationship(jwt, question);
+  await verifyQuestionRelationship(question);
   try {
-    return await getJwtTables(jwt).createRow<QuestionRow>({
+    const created = await getPrivilegedTables().createRow<QuestionRow>({
       databaseId: getDatabaseId(),
       tableId: questionsTableId,
       rowId: ID.unique(),
       data: question,
     });
+    return sanitizeQuestion(created);
   } catch (error) {
     const code = getErrorCode(error);
     if (code === 401 || code === 403) throw new TeacherQuestionError('You do not have permission to create quiz questions.', 403);
@@ -155,7 +217,7 @@ export async function updateTeacherQuestion(jwt: string, questionId: string, val
   const question = parseQuestionInput(value, kind);
   const questionKind = kind ?? getQuestionKind(question);
   let existing: Models.Row & { topic_id?: string; lesson_id?: string | null };
-  const tablesDb = getJwtTables(jwt);
+  const tablesDb = getPrivilegedTables();
   try {
     existing = await tablesDb.getRow({ databaseId: getDatabaseId(), tableId: questionsTableId, rowId: questionId });
   } catch (error) {
@@ -169,14 +231,15 @@ export async function updateTeacherQuestion(jwt: string, questionId: string, val
   if (getQuestionKind(existing) !== questionKind) {
     throw new TeacherQuestionError('An existing question cannot be changed to another quiz or assessment type.', 400);
   }
-  await verifyQuestionRelationship(jwt, question);
+  await verifyQuestionRelationship(question);
   try {
-    return await tablesDb.updateRow<QuestionRow>({
+    const updated = await tablesDb.updateRow<QuestionRow>({
       databaseId: getDatabaseId(),
       tableId: questionsTableId,
       rowId: questionId,
       data: question,
     });
+    return sanitizeQuestion(updated);
   } catch (error) {
     const code = getErrorCode(error);
     if (code === 404) throw new TeacherQuestionError('The question was not found.', 404);
@@ -189,7 +252,7 @@ export async function deleteTeacherQuestion(jwt: string, questionId: string) {
   await verifyTeacher(jwt);
   if (!questionId.trim()) throw new TeacherQuestionError('A valid question ID is required.', 400);
   try {
-    await getJwtTables(jwt).deleteRow({
+    await getPrivilegedTables().deleteRow({
       databaseId: getDatabaseId(),
       tableId: questionsTableId,
       rowId: questionId,

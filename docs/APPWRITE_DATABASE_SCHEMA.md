@@ -82,3 +82,25 @@ Fields:
 - completion_percentage: Integer
 - best_score: Integer
 - last_accessed_at: Datetime
+
+## Table: achievements
+
+Purpose: Store the published achievement goal catalog read by the student dashboard.
+
+Fields:
+- name: Varchar
+- description: Text
+- icon: Varchar
+- xp_reward: Integer
+- requirement_type: Varchar
+- requirement_value: Integer
+- is_active: Boolean
+
+This catalog is not a record of which student earned an achievement. The current schema has no student-to-achievement relation.
+
+## Student dashboard data coverage
+
+- The dashboard uses the authenticated Appwrite account ID to read its `profiles`, `progress`, and `quiz_attempts` records. Quiz attempt scores include topic quizzes, levels, teacher quizzes, and lesson assessments.
+- `progress` stores topic-level aggregate values; it does not identify completed lessons. Lesson reading completion is not currently stored.
+- Standalone game session scores/progress do not have a student-linked database table. Some game state is stored in browser-local storage and is not an authenticated student record.
+- No student-earned-achievement records are available from the current schema. The dashboard must not infer earned awards from the active achievement goal catalog.

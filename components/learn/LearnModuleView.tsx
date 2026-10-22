@@ -895,7 +895,7 @@ export default function LearnModuleView({ module }: LearnModuleViewProps) {
           <div className="space-y-6">
             <AnimationStory key={module.key} story={story} />
             <TechnicalAnimation moduleKey={module.key} moduleTitle={module.title} />
-            <AnimationVideo />
+            <AnimationVideo moduleKey={module.key} />
           </div>
         );
       }

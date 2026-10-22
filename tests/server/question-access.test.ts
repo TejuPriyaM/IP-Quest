@@ -2,14 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const appwriteMock = vi.hoisted(() => ({
   accountGet: vi.fn(),
+  teacherTeamGet: vi.fn(),
   listRows: vi.fn(),
   getRow: vi.fn(),
   createRow: vi.fn(),
   updateRow: vi.fn(),
   deleteRow: vi.fn(),
+  attemptRows: [] as Array<Record<string, unknown>>,
   questionRows: [] as Array<Record<string, unknown>>,
   responseRows: [] as Array<Record<string, unknown>>,
   topicPublished: true,
+  profileRole: 'student',
+  isTeacherTeamMember: false,
 }));
 
 vi.mock('server-only', () => ({}));
@@ -46,6 +50,10 @@ vi.mock('node-appwrite', () => {
     deleteRow(params: unknown) { return appwriteMock.deleteRow(this.client.authMode, params); }
   }
 
+  class MockTeams {
+    get(params: unknown) { return appwriteMock.teacherTeamGet(params); }
+  }
+
   return {
     Account: MockAccount,
     Client: MockClient,
@@ -56,12 +64,17 @@ vi.mock('node-appwrite', () => {
       limit: (value: number) => `limit:${value}`,
       cursorAfter: (value: string) => `cursorAfter:${value}`,
       orderDesc: (key: string) => `orderDesc:${key}`,
+      orderAsc: (key: string) => `orderAsc:${key}`,
     },
     TablesDB: MockTablesDB,
+    Teams: MockTeams,
   };
 });
 
-import { startOrResumeLevel } from '@/lib/server/level-quiz';
+import { getQuizPerformanceHistoryForUserId, getStudentPerformanceHistory, startOrResumeLevel, verifyQuizRole } from '@/lib/server/level-quiz';
+import { loadQuizQuestions } from '@/lib/server/quiz';
+import { submitLessonAssessment } from '@/lib/server/lesson-assessments';
+import { listTeacherQuestions } from '@/lib/server/teacher-questions';
 import {
   getTeacherAssessmentResponses,
   listTeacherAssessmentQuestions,
@@ -113,15 +126,28 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('APPWRITE_QUIZ_API_KEY', 'test-api-key');
   appwriteMock.questionRows = [];
+  appwriteMock.attemptRows = [];
   appwriteMock.responseRows = [];
   appwriteMock.topicPublished = true;
+  appwriteMock.profileRole = 'student';
+  appwriteMock.isTeacherTeamMember = false;
   appwriteMock.accountGet.mockResolvedValue({ $id: 'student-1' });
+  appwriteMock.teacherTeamGet.mockImplementation(async () => {
+    if (appwriteMock.isTeacherTeamMember) return { $id: 'teachers' };
+    throw Object.assign(new Error('Not in Teachers team'), { code: 403 });
+  });
   appwriteMock.getRow.mockImplementation(async (_authMode: string, rawParams: unknown) => {
     const params = rawParams as { tableId: string; rowId: string };
-    if (params.tableId === 'profiles') return { $id: 'student-1', role: 'student' };
+    if (params.tableId === 'profiles') return { $id: 'student-1', role: appwriteMock.profileRole };
     if (params.tableId === 'topics') {
       return { $id: 'topic-1', title: 'Patent', slug: 'patent', is_published: appwriteMock.topicPublished };
     }
+    if (params.tableId === 'lessons') return {
+      $id: params.rowId,
+      title: 'Lesson title',
+      topic_id: 'topic-1',
+      is_published: true,
+    };
     if (params.tableId === 'questions') {
       const question = appwriteMock.questionRows.find((row) => row.$id === params.rowId);
       if (question) return question;
@@ -130,7 +156,13 @@ beforeEach(() => {
   });
   appwriteMock.listRows.mockImplementation(async (_authMode: string, rawParams: unknown) => {
     const params = rawParams as { tableId: string; queries: string[] };
-    if (params.tableId === 'quiz_attempts') return { rows: [] };
+    if (params.tableId === 'quiz_attempts') {
+      const userId = params.queries.find((query) => query.startsWith('equal:user_id:'))?.slice('equal:user_id:'.length);
+      const filteredRows = appwriteMock.attemptRows.filter((row) => row.user_id === userId);
+      const cursor = params.queries.find((query) => query.startsWith('cursorAfter:'))?.slice('cursorAfter:'.length);
+      const cursorIndex = cursor ? filteredRows.findIndex((row) => row.$id === cursor) + 1 : 0;
+      return { rows: filteredRows.slice(cursorIndex, cursorIndex + 100) };
+    }
     if (params.tableId === 'questions') {
       if (params.queries.includes('isNull:lesson_id')) {
         return { rows: appwriteMock.questionRows.filter((row) => row.lesson_id === null) };
@@ -156,6 +188,220 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+});
+
+describe('server-enforced teacher authorization', () => {
+  it('rejects a forged teacher profile when the authenticated user is not a team member', async () => {
+    appwriteMock.profileRole = 'teacher';
+
+    await expect(verifyQuizRole('student-jwt', 'teacher')).rejects.toMatchObject({ statusCode: 403 });
+    expect(appwriteMock.accountGet).toHaveBeenCalledOnce();
+    expect(appwriteMock.getRow).not.toHaveBeenCalled();
+  });
+
+  it('allows authenticated team members regardless of profile role', async () => {
+    appwriteMock.profileRole = 'student';
+    appwriteMock.isTeacherTeamMember = true;
+
+    await expect(verifyQuizRole('student-jwt', 'teacher')).resolves.toMatchObject({ $id: 'student-1' });
+    expect(appwriteMock.getRow).toHaveBeenCalledWith('jwt', expect.objectContaining({ tableId: 'profiles', rowId: 'student-1' }));
+  });
+
+  it('does not let teacher team members use student-only quiz routes', async () => {
+    appwriteMock.isTeacherTeamMember = true;
+
+    await expect(verifyQuizRole('student-jwt', 'student')).rejects.toMatchObject({ statusCode: 403 });
+    expect(appwriteMock.getRow).not.toHaveBeenCalled();
+  });
+
+  it('does not let a forged profile role retrieve teacher question rows or answer keys', async () => {
+    appwriteMock.profileRole = 'teacher';
+    appwriteMock.questionRows = [makeQuestion()];
+
+    await expect(listTeacherQuestions('student-jwt')).rejects.toMatchObject({ statusCode: 403 });
+    expect(appwriteMock.listRows).not.toHaveBeenCalled();
+  });
+
+  it('only returns answer-free quiz questions to an authenticated student', async () => {
+    appwriteMock.questionRows = [makeQuestion()];
+
+    const questions = await loadQuizQuestions('student-jwt', 'topic-1');
+
+    expect(questions).toHaveLength(1);
+    expect(questions[0]).not.toHaveProperty('correct_option');
+    expect(questions[0]).not.toHaveProperty('explanation');
+  });
+
+  it('does not give an approved teacher access to student performance history', async () => {
+    appwriteMock.isTeacherTeamMember = true;
+
+    await expect(getStudentPerformanceHistory('teacher-jwt')).rejects.toMatchObject({ statusCode: 403 });
+    expect(appwriteMock.listRows).not.toHaveBeenCalled();
+  });
+
+  it('scopes a student performance query to the JWT-authenticated user ID', async () => {
+    await getStudentPerformanceHistory('student-jwt');
+
+    const attemptQuery = appwriteMock.listRows.mock.calls.find(([, params]) =>
+      (params as { tableId: string }).tableId === 'quiz_attempts',
+    );
+    expect((attemptQuery?.[1] as { queries: string[] }).queries).toContain('equal:user_id:student-1');
+  });
+
+  it('paginates attempts, omits missing scores, and returns no saved answer fields', async () => {
+    appwriteMock.attemptRows = [
+      ...Array.from({ length: 101 }, (_, index) => ({
+        $id: `attempt-${index}`,
+        user_id: 'student-1',
+        topic_id: 'topic-1',
+        ...(index === 0 ? { lesson_id: 'lesson-1' } : { status: 'completed' }),
+        score: 4,
+        total_questions: 5,
+        completed_at: '2026-01-01T00:00:00.000Z',
+        passed: true,
+        responses: JSON.stringify({ answers: [{ selectedOption: 'A', correctAnswer: 'A' }] }),
+      })),
+      {
+        $id: 'attempt-missing-score',
+        user_id: 'student-1',
+        topic_id: 'topic-1',
+        total_questions: 5,
+        completed_at: '2026-01-02T00:00:00.000Z',
+      },
+      {
+        $id: 'attempt-zero-total',
+        user_id: 'student-1',
+        topic_id: 'topic-1',
+        score: 0,
+        total_questions: 0,
+        completed_at: '2026-01-03T00:00:00.000Z',
+      },
+      {
+        $id: 'attempt-negative-score',
+        user_id: 'student-1',
+        topic_id: 'topic-1',
+        score: -1,
+        total_questions: 5,
+        completed_at: '2026-01-04T00:00:00.000Z',
+      },
+      {
+        $id: 'attempt-score-over-total',
+        user_id: 'student-1',
+        topic_id: 'topic-1',
+        score: 6,
+        total_questions: 5,
+        completed_at: '2026-01-05T00:00:00.000Z',
+      },
+      {
+        $id: 'attempt-fractional-total',
+        user_id: 'student-1',
+        topic_id: 'topic-1',
+        score: 1,
+        total_questions: 2.5,
+        completed_at: '2026-01-06T00:00:00.000Z',
+      },
+      {
+        $id: 'attempt-fractional-score',
+        user_id: 'student-1',
+        topic_id: 'topic-1',
+        score: 1.5,
+        total_questions: 2,
+        completed_at: '2026-01-07T00:00:00.000Z',
+      },
+      {
+        $id: 'attempt-valid-zero-score',
+        user_id: 'student-1',
+        topic_id: 'topic-1',
+        score: 0,
+        total_questions: 5,
+        status: 'completed',
+        completed_at: '2026-01-08T00:00:00.000Z',
+      },
+      {
+        $id: 'attempt-other-student',
+        user_id: 'student-2',
+        topic_id: 'topic-1',
+        score: 5,
+        total_questions: 5,
+        completed_at: '2026-01-04T00:00:00.000Z',
+      },
+    ];
+
+    const history = await getQuizPerformanceHistoryForUserId('student-1');
+    const attemptQueries = appwriteMock.listRows.mock.calls.filter(([, params]) =>
+      (params as { tableId: string }).tableId === 'quiz_attempts',
+    );
+    const flattenedHistory = [...history.levelAttempts, ...history.teacherQuizAttempts, ...history.lessonAssessments];
+
+    expect(attemptQueries).toHaveLength(2);
+    expect((attemptQueries[1][1] as { queries: string[] }).queries).toContain('cursorAfter:attempt-99');
+    expect(flattenedHistory).toHaveLength(102);
+    expect(flattenedHistory.find((attempt) => attempt.attemptId === 'attempt-valid-zero-score'))
+      .toMatchObject({ score: 0, totalQuestions: 5, percentage: 0 });
+    expect(flattenedHistory.every((attempt) => attempt.percentage >= 0 && attempt.percentage <= 100)).toBe(true);
+    expect(history.lessonAssessments[0]).toMatchObject({ lessonTitle: 'Lesson title', score: 4, totalQuestions: 5 });
+    expect(JSON.stringify(history)).not.toContain('responses');
+    expect(JSON.stringify(history)).not.toContain('correctAnswer');
+    expect(JSON.stringify(history)).not.toContain('selectedOption');
+  });
+
+  it('maps lesson assessments from versioned metadata in the existing responses column', async () => {
+    appwriteMock.attemptRows = [{
+      $id: 'lesson-assessment-attempt',
+      user_id: 'student-1',
+      topic_id: 'topic-1',
+      score: 0,
+      total_questions: 1,
+      completed_at: '2026-02-01T00:00:00.000Z',
+      status: 'completed',
+      responses: JSON.stringify({ version: 1, kind: 'lesson_assessment', lessonId: 'lesson-1' }),
+    }];
+
+    const history = await getQuizPerformanceHistoryForUserId('student-1');
+
+    expect(history.lessonAssessments).toMatchObject([
+      { attemptId: 'lesson-assessment-attempt', lessonId: 'lesson-1', lessonTitle: 'Lesson title', percentage: 0 },
+    ]);
+    expect(history.teacherQuizAttempts).toHaveLength(0);
+    expect(JSON.stringify(history)).not.toContain('responses');
+  });
+
+  it('saves lesson assessment results without writing the unsupported lesson_id column or student answers', async () => {
+    appwriteMock.questionRows = [makeQuestion({
+      $id: 'lesson-question',
+      lesson_id: 'lesson-1',
+      level: null,
+    })];
+
+    const result = await submitLessonAssessment('student-jwt', 'topic-1', 'lesson-1', [
+      { questionId: 'lesson-question', selectedOption: 'A' },
+    ]);
+    const params = appwriteMock.createRow.mock.calls[0][1] as {
+      tableId: string;
+      data: Record<string, unknown>;
+    };
+    const metadata = JSON.parse(params.data.responses as string) as Record<string, unknown>;
+
+    expect(result).toMatchObject({ lessonId: 'lesson-1', score: 1, totalQuestions: 1 });
+    expect(params.tableId).toBe('quiz_attempts');
+    expect(params.data).not.toHaveProperty('lesson_id');
+    expect(params.data.status).toBe('completed');
+    expect(metadata).toEqual({ version: 1, kind: 'lesson_assessment', lessonId: 'lesson-1' });
+    expect(metadata).not.toHaveProperty('answers');
+  });
+
+  it('allows approved teachers to read answer-bearing questions only through the server path', async () => {
+    appwriteMock.isTeacherTeamMember = true;
+    appwriteMock.questionRows = [makeQuestion()];
+
+    const questions = await listTeacherQuestions('teacher-jwt');
+
+    expect(questions[0].correct_option).toBe('A');
+    const questionQuery = appwriteMock.listRows.mock.calls.find(([, params]) =>
+      (params as { tableId: string }).tableId === 'questions',
+    );
+    expect(questionQuery?.[0]).toBe('key');
+  });
 });
 
 describe('student Level Quiz question access', () => {

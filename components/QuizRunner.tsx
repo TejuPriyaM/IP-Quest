@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { createQuizJWT } from '@/lib/auth';
+import { notifyDashboardDataChanged } from '@/lib/dashboard-events';
 
 type QuizQuestion = {
   id: string;
@@ -267,6 +268,7 @@ export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRun
           setSubmissionError('We could not confirm your Teacher Quiz result. Please try again.');
           return;
         }
+        notifyDashboardDataChanged();
         setTeacherResult(payload);
         return;
       }
@@ -300,6 +302,7 @@ export default function QuizRunner({ topic, mode = 'standard', onExit }: QuizRun
         return;
       }
 
+      notifyDashboardDataChanged();
       const parameters = new URLSearchParams({ attemptId: result.attemptId });
       window.location.assign(`/games/results?${parameters.toString()}`);
     } catch {

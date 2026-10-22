@@ -54,46 +54,65 @@ export default function LoginPage() {
   }
 
   if (isLoading) {
-    return <main className="section-shell flex min-h-[70vh] items-center justify-center py-16" aria-busy="true">Checking your session...</main>;
+    return <main className="login-page login-loading" aria-busy="true">Checking your session...</main>;
   }
 
   return (
-    <main className="section-shell flex min-h-[calc(100vh-81px)] items-center justify-center py-12 sm:py-16">
-      <section className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-soft sm:p-9" aria-labelledby="login-heading">
-        <div className="mb-8 border-b border-slate-100 pb-7">
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Welcome back</p>
-          <h1 id="login-heading" className="mt-3 text-3xl font-black tracking-tight text-slate-950">Log in to IP Quest</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-600">Pick up where your ideas left off.</p>
-        </div>
+    <main className="login-page">
+      <div className="login-content">
+        <section className="welcome-panel" aria-labelledby="welcome-heading">
+          <span className="welcome-badge">A world of big ideas</span>
+          <h1 id="welcome-heading">Make your mark. <span className="highlight">Protect your ideas.</span></h1>
+          <p>Discover the clever creations, stories, and inventions that make our world more interesting.</p>
+          <div className="adventure-art" aria-hidden="true">
+            <span className="art-item">💡</span>
+            <span className="art-item">🎨</span>
+            <span className="art-item">🎵</span>
+            <span className="art-item">🚀</span>
+          </div>
+          <div className="learning-tags" aria-label="Explore creativity, inventions, and ideas">
+            <span>Creativity</span>
+            <span>Inventions</span>
+            <span>Big ideas</span>
+          </div>
+        </section>
+        <section className="login-card" aria-labelledby="login-heading">
+          <div className="login-heading">
+            <p className="eyebrow">Welcome back</p>
+            <h1 id="login-heading">Log in to IP Quest</h1>
+            <p className="subtitle">Pick up where your ideas left off.</p>
+          </div>
 
-        <form className="mt-8 space-y-5" onSubmit={handleSubmit} noValidate>
-          <fieldset>
-            <legend className="mb-2 block text-sm font-semibold text-slate-700">Role</legend>
-            <div className="grid grid-cols-2 gap-3">
-              {(['student', 'teacher', 'admin'] as const).map((role) => (
-                <label key={role} className={`cursor-pointer rounded-xl border px-4 py-3 text-center text-sm font-semibold capitalize transition ${selectedRole === role ? 'border-brand-600 bg-brand-50 text-brand-700 ring-2 ring-brand-100' : 'border-slate-300 text-slate-600 hover:border-brand-300'}`}>
-                  <input type="radio" name="login-role" value={role} checked={selectedRole === role} onChange={() => setSelectedRole(role)} className="sr-only" />
-                  {role}
-                </label>
-              ))}
+          <form className="login-form" onSubmit={handleSubmit} noValidate>
+            <fieldset className="login-role-fieldset">
+              <legend className="login-label">Role</legend>
+              <div className="role-options">
+                {(['student', 'teacher', 'admin'] as const).map((role) => (
+                  <label key={role} className={`role-option${selectedRole === role ? ' selected' : ''}`}>
+                    <input type="radio" name="login-role" value={role} checked={selectedRole === role} onChange={() => setSelectedRole(role)} />
+                    <span>{role}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <div className="login-field">
+              <label htmlFor="email" className="login-label">Email</label>
+              <input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="login-input" />
             </div>
-          </fieldset>
-          <div>
-            <label htmlFor="email" className="mb-2 block text-sm font-semibold text-slate-700">Email</label>
-            <input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
-          </div>
-          <div>
-            <label htmlFor="password" className="mb-2 block text-sm font-semibold text-slate-700">Password</label>
-            <input id="password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
-          </div>
-          {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-          <button type="submit" disabled={isSubmitting} className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60">
-            {isSubmitting ? 'Logging in...' : 'Log in'}
-          </button>
-        </form>
+            <div className="login-field">
+              <label htmlFor="password" className="login-label">Password</label>
+              <input id="password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className="login-input" />
+            </div>
+            {error && <p role="alert" className="login-error">{error}</p>}
+            <button type="submit" disabled={isSubmitting} className="login-button">
+              {isSubmitting ? 'Logging in...' : 'Log in'}
+            </button>
+          </form>
 
-        <p className="mt-6 text-center text-sm text-slate-600">New to IP Quest? <Link href="/signup" className="font-bold text-brand-700 hover:text-brand-800">Create an account</Link></p>
-      </section>
+          <p className="login-footer"><Link href="/forgot-password">Forgot your password?</Link></p>
+          <p className="login-footer">New to IP Quest? <Link href="/signup">Create an account</Link></p>
+        </section>
+      </div>
     </main>
   );
 }

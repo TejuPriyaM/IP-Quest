@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -47,9 +49,6 @@ body {
     @apply rounded-2xl border border-slate-200 bg-white shadow-soft;
   }
 }
-<<<<<<< Updated upstream
-=======
-
 :root {
   --login-blue: #4263eb;
   --login-purple: #8854e8;
@@ -1690,4 +1689,3 @@ body {
     animation: none !important;
   }
 }
->>>>>>> Stashed changes

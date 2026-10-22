@@ -64,6 +64,34 @@ export async function login({ email, password }: AuthCredentials): Promise<Model
 	}
 }
 
+export async function requestPasswordRecovery(email: string, redirectUrl: string): Promise<void> {
+	try {
+		await getAccount().createRecovery(email, redirectUrl);
+	} catch (error) {
+		const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+
+		if (code === 404) {
+			return;
+		}
+
+		throw new AuthError(getAuthErrorMessage(error, 'Unable to send a password-reset link. Please try again.'));
+	}
+}
+
+export async function completePasswordRecovery(userId: string, secret: string, password: string): Promise<void> {
+	try {
+		await getAccount().updateRecovery(userId, secret, password);
+	} catch (error) {
+		const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+
+		if (code === 401 || code === 404) {
+			throw new AuthError('This password-reset link is invalid or expired. Please request a new reset link.');
+		}
+
+		throw new AuthError(getAuthErrorMessage(error, 'Unable to reset your password. Please request a new reset link and try again.'));
+	}
+}
+
 export async function createCurrentUserJWT(): Promise<string> {
 	try {
 		const token = await getAccount().createJWT();

@@ -1,6 +1,6 @@
 import { Account, ID, type Models } from 'appwrite';
 import { getAppwriteClient } from '@/lib/appwrite';
-import { getProfile, type ProfileRow } from '@/lib/profile';
+import type { ProfileRow } from '@/lib/profile';
 
 export type AuthCredentials = {
 	email: string;
@@ -119,28 +119,46 @@ export function getRoleBasedRoute(role: UserRole): string {
 	}[role];
 }
 
-export function getProfileRole(profile: ProfileRow): UserRole {
-	if (profile.role === 'teacher' || profile.role === 'admin') {
-		return profile.role;
-	}
+export type CurrentProfile = {
+	profile: ProfileRow;
+	role: UserRole;
+	accountRole: UserRole;
+};
 
-	return 'student';
+export function matchesLoginRole(profile: CurrentProfile | null, selectedRole: 'student' | 'teacher' | 'admin') {
+	if (!profile) return false;
+	if (selectedRole === 'admin') return profile.role === 'admin' && profile.accountRole === 'admin';
+	if (profile.role === 'admin' || profile.accountRole === 'admin') return false;
+	if (selectedRole === 'teacher') return profile.accountRole === 'teacher' || profile.role === 'teacher';
+	return profile.accountRole === 'student' && profile.role === 'student';
 }
 
-export async function getCurrentProfile(): Promise<{ profile: ProfileRow; role: UserRole } | null> {
+export async function getCurrentProfile(): Promise<CurrentProfile | null> {
 	const user = await getCurrentUser();
 
 	if (!user) {
 		return null;
 	}
 
-	const profile = await getProfile(user.$id);
+	const jwt = await createCurrentUserJWT();
+	const response = await fetch('/api/auth/profile', {
+		headers: { Authorization: `Bearer ${jwt}` },
+	});
+	const payload: unknown = await response.json().catch(() => null);
+	if (
+		!response.ok || typeof payload !== 'object' || payload === null ||
+		!('profile' in payload) || !('role' in payload) || !('accountRole' in payload)
+	) {
+		throw new AuthError('Unable to verify your account profile. Please try again.');
+	}
 
-	return { profile, role: getProfileRole(profile) };
+	return payload as CurrentProfile;
 }
 
 export async function getCurrentDestination(): Promise<string | null> {
 	const currentProfile = await getCurrentProfile();
 
-	return currentProfile ? getRoleBasedRoute(currentProfile.role) : null;
+	if (!currentProfile) return null;
+		if (currentProfile.accountRole === 'teacher' && currentProfile.role !== 'teacher') return '/teacher/setup';
+	return getRoleBasedRoute(currentProfile.role);
 }

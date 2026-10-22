@@ -2,9 +2,9 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
-import { listTopics, type TopicRow } from '@/lib/topics';
+import { listTeacherTopics, type TopicRow } from '@/lib/topics';
 import { createQuestion, deleteQuestion, listQuestions, type Question, type QuestionInput, type QuestionKind, updateQuestion } from '@/lib/questions';
-import { listLessons, type Lesson } from '@/lib/lessons';
+import { listTeacherLessons, type Lesson } from '@/lib/lessons';
 import { getLearnTopicForModule, LEARN_MODULES } from '@/lib/learn';
 import type { DifficultyLevel } from '@/data/mockTopics';
 
@@ -74,7 +74,7 @@ export default function TeacherQuestionsPage() {
     setLoadError('');
 
     try {
-      const [topicRows, lessonRows, questionRows] = await Promise.all([listTopics(), listLessons(), listQuestions()]);
+      const [topicRows, lessonRows, questionRows] = await Promise.all([listTeacherTopics(), listTeacherLessons(), listQuestions()]);
       setTopics(topicRows);
       setLessons(lessonRows);
       setQuestions(shuffleQuestions(questionRows));

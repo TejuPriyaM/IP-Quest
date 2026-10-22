@@ -3,13 +3,13 @@
 import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getCurrentDestination, getCurrentProfile, login, logout, type UserRole } from '@/lib/auth';
+import { getCurrentDestination, getCurrentProfile, login, logout, matchesLoginRole, type UserRole } from '@/lib/auth';
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState<Extract<UserRole, 'student' | 'teacher'>>('student');
+  const [selectedRole, setSelectedRole] = useState<Extract<UserRole, 'student' | 'teacher' | 'admin'>>('student');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,7 +38,7 @@ export default function LoginPage() {
       await login({ email: email.trim(), password });
       const currentProfile = await getCurrentProfile();
 
-      if (!currentProfile || currentProfile.role !== selectedRole) {
+      if (!matchesLoginRole(currentProfile, selectedRole)) {
         await logout();
         setError('The selected role does not match your account.');
         setIsSubmitting(false);
@@ -87,7 +87,7 @@ export default function LoginPage() {
             <fieldset className="login-role-fieldset">
               <legend className="login-label">Role</legend>
               <div className="role-options">
-                {(['student', 'teacher'] as const).map((role) => (
+                {(['student', 'teacher', 'admin'] as const).map((role) => (
                   <label key={role} className={`role-option${selectedRole === role ? ' selected' : ''}`}>
                     <input type="radio" name="login-role" value={role} checked={selectedRole === role} onChange={() => setSelectedRole(role)} />
                     <span>{role}</span>

@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AuthGuard from '@/components/AuthGuard';
-import { deleteTopic, listTopics, type Topic, type TopicRow } from '@/lib/topics';
+import { deleteTopic, listTeacherTopics, type Topic, type TopicRow } from '@/lib/topics';
 
 const topicAssessmentDraftKey = 'ip-quest-teacher-assessment-draft';
 
@@ -44,7 +44,7 @@ export default function TeacherTopicsPage() {
     setLoadError('');
 
     try {
-      setTopics(await listTopics());
+      setTopics(await listTeacherTopics());
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'Unable to load topics. Please try again.');
     } finally {

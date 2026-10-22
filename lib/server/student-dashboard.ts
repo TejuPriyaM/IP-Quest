@@ -14,6 +14,8 @@ type StudentProfile = Models.Row & {
   user_id?: string;
   display_name?: unknown;
   role?: unknown;
+  grade_level?: unknown;
+  created_at?: unknown;
   total_points?: unknown;
 };
 
@@ -222,7 +224,12 @@ export async function getStudentDashboard(jwt: string) {
 
   return {
     profile: {
-      displayName: typeof profile.display_name === 'string' && profile.display_name.trim() ? profile.display_name : null,
+      displayName: typeof profile.display_name === 'string' && profile.display_name.trim()
+        ? profile.display_name
+        : user.name.trim() || null,
+      email: user.email,
+      gradeLevel: typeof profile.grade_level === 'number' && Number.isInteger(profile.grade_level) ? profile.grade_level : null,
+      createdAt: typeof profile.created_at === 'string' ? profile.created_at : null,
       totalPoints: points,
     },
     progress,

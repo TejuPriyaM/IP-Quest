@@ -51,7 +51,7 @@ vi.mock('node-appwrite', () => {
 import { getStudentDashboard, StudentDashboardError } from '@/lib/server/student-dashboard';
 import { LevelQuizError } from '@/lib/server/level-quiz';
 
-const student = { $id: 'student-verified-id', email: 'private@example.test' };
+const student = { $id: 'student-verified-id', email: 'private@example.test', name: 'Account Learner' };
 
 function history(score = 7) {
   return {
@@ -79,6 +79,8 @@ beforeEach(() => {
     user_id: student.$id,
     display_name: 'Learner',
     role: 'student',
+    grade_level: 8,
+    created_at: '2026-01-15T10:00:00.000Z',
     total_points: 125,
   });
   mocks.listRows.mockImplementation(async (params: { tableId: string; queries: string[] }) => {
@@ -107,7 +109,13 @@ describe('student dashboard data', () => {
     const progressQuery = mocks.listRows.mock.calls.find(([params]) => (params as { tableId: string }).tableId === 'progress')?.[0] as { queries: string[] };
     expect(progressQuery.queries).toContain(`equal:user_id:${student.$id}`);
     expect(mocks.getQuizPerformanceHistoryForUserId).toHaveBeenCalledWith(student.$id, 'student-jwt');
-    expect(dashboard.profile).toMatchObject({ displayName: 'Learner', totalPoints: 125 });
+    expect(dashboard.profile).toMatchObject({
+      displayName: 'Learner',
+      email: student.email,
+      gradeLevel: 8,
+      createdAt: '2026-01-15T10:00:00.000Z',
+      totalPoints: 125,
+    });
     expect(dashboard.progress).toEqual([expect.objectContaining({ topicId: 'topic-patent', completionPercentage: 40 })]);
     expect(dashboard.averageCompletion).toBe(40);
     expect(dashboard.lessonAssessments[0]).toMatchObject({ score: 0, percentage: 0, lessonTitle: 'Patent basics' });
@@ -116,7 +124,7 @@ describe('student dashboard data', () => {
     expect(dashboard.lessonReadingCompletion).toBeNull();
     expect(JSON.stringify(dashboard)).not.toContain('responses');
     expect(JSON.stringify(dashboard)).not.toContain('selectedOption');
-    expect(JSON.stringify(dashboard)).not.toContain(student.email);
+    expect(JSON.stringify(dashboard)).toContain(student.email);
     expect(JSON.stringify(dashboard)).not.toContain('other-student');
   });
 
@@ -136,6 +144,59 @@ describe('student dashboard data', () => {
     expect(second.profile.totalPoints).toBe(260);
     expect(second.averageCompletion).toBe(80);
     expect(second.quizAttempts[0].score).toBe(9);
+  });
+
+  it('isolates profile, progress, and marks for two authenticated students', async () => {
+    const secondStudent = { $id: 'student-two-id', email: 'second@example.test', name: 'Second Account' };
+    mocks.verifyQuizStudent.mockImplementation(async (jwt: string) => (
+      jwt === 'first-student-jwt' ? student : secondStudent
+    ));
+    mocks.profileGetRow.mockImplementation(async ({ rowId }: { rowId: string }) => ({
+      $id: rowId,
+      user_id: rowId,
+      display_name: rowId === student.$id ? 'First Student' : '',
+      role: 'student',
+      grade_level: rowId === student.$id ? 7 : 10,
+      total_points: rowId === student.$id ? 12 : 45,
+    }));
+    mocks.listRows.mockImplementation(async (params: { tableId: string; queries: string[] }) => {
+      if (params.tableId === 'progress') {
+        const userId = params.queries.find((query) => query.startsWith('equal:user_id:'))?.slice('equal:user_id:'.length);
+        return { rows: [{
+          $id: `${userId}-progress`,
+          user_id: userId,
+          topic_id: 'topic-patent',
+          completion_percentage: userId === student.$id ? 20 : 90,
+          best_score: userId === student.$id ? 2 : 9,
+        }] };
+      }
+      if (params.tableId === 'topics') return { rows: [{ $id: 'topic-patent', title: 'Patents', slug: 'patent', is_published: true }] };
+      if (params.tableId === 'achievements') return { rows: [] };
+      return { rows: [] };
+    });
+    mocks.getQuizPerformanceHistoryForUserId.mockImplementation(async (userId: string) => ({
+      quizAttempts: [{
+        attemptId: `${userId}-quiz`, topicId: 'topic-patent', topicTitle: 'Patents',
+        score: userId === student.$id ? 2 : 9, totalQuestions: 10,
+        percentage: userId === student.$id ? 20 : 90, completedAt: '2026-10-20T10:00:00.000Z',
+        kind: 'quiz',
+      }],
+      levelAttempts: [],
+      teacherQuizAttempts: [],
+      lessonAssessments: [],
+    }));
+
+    const firstDashboard = await getStudentDashboard('first-student-jwt');
+    const secondDashboard = await getStudentDashboard('second-student-jwt');
+
+    expect(firstDashboard.profile).toMatchObject({ displayName: 'First Student', email: student.email, gradeLevel: 7, totalPoints: 12 });
+    expect(firstDashboard.progress[0]).toMatchObject({ completionPercentage: 20, bestScore: 2 });
+    expect(firstDashboard.quizAttempts[0]).toMatchObject({ attemptId: `${student.$id}-quiz`, score: 2 });
+    expect(secondDashboard.profile).toMatchObject({ displayName: secondStudent.name, email: secondStudent.email, gradeLevel: 10, totalPoints: 45 });
+    expect(secondDashboard.progress[0]).toMatchObject({ completionPercentage: 90, bestScore: 9 });
+    expect(secondDashboard.quizAttempts[0]).toMatchObject({ attemptId: `${secondStudent.$id}-quiz`, score: 9 });
+    expect(JSON.stringify(firstDashboard)).not.toContain(secondStudent.email);
+    expect(JSON.stringify(secondDashboard)).not.toContain(student.email);
   });
 
   it('returns real empty values when the student has no saved progress', async () => {

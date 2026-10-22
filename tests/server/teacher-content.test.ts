@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   deleteRow: vi.fn(),
 }));
 
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/appwrite', () => ({
   appwriteConfig: {

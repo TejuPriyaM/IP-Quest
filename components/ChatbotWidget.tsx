@@ -7,7 +7,34 @@ import { createCurrentUserJWT, getCurrentProfile, type UserRole } from '@/lib/au
 type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
+  quiz?: GeneratedQuiz;
 };
+
+type GeneratedQuiz = {
+  topic: string;
+  title: string;
+  questions: Array<{
+    question_text: string;
+    options: string[];
+    correct_option: string;
+    explanation: string;
+    difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  }>;
+};
+
+function isGeneratedQuiz(value: unknown): value is GeneratedQuiz {
+  if (typeof value !== 'object' || value === null || !('title' in value) || typeof value.title !== 'string'
+    || !('topic' in value) || typeof value.topic !== 'string' || !('questions' in value)
+    || !Array.isArray(value.questions) || value.questions.length !== 5) return false;
+
+  return value.questions.every((question) => typeof question === 'object' && question !== null
+    && 'question_text' in question && typeof question.question_text === 'string'
+    && 'options' in question && Array.isArray(question.options) && question.options.length === 4
+    && question.options.every((option: unknown) => typeof option === 'string')
+    && 'correct_option' in question && typeof question.correct_option === 'string' && question.options.includes(question.correct_option)
+    && 'explanation' in question && typeof question.explanation === 'string'
+    && 'difficulty' in question && ['Beginner', 'Intermediate', 'Advanced'].includes(question.difficulty as string));
+}
 
 function greeting(role: UserRole): ChatMessage {
   return {
@@ -79,7 +106,7 @@ export default function ChatbotWidget() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: nextMessages, contextPath: pathname || '/' }),
+        body: JSON.stringify({ messages: nextMessages.map(({ role: messageRole, content: messageContent }) => ({ role: messageRole, content: messageContent })), contextPath: pathname || '/' }),
         signal: controller.signal,
       });
       const payload: unknown = await response.json().catch(() => null);
@@ -92,9 +119,15 @@ export default function ChatbotWidget() {
       if (typeof payload !== 'object' || payload === null || !('message' in payload) || typeof payload.message !== 'string') {
         throw new Error('The assistant returned an invalid response. Please try again.');
       }
-      setMessages((current) => [...current, { role: 'assistant', content: payload.message as string }]);
+      const quiz = 'quiz' in payload ? payload.quiz : undefined;
+      if (quiz !== undefined && !isGeneratedQuiz(quiz)) {
+        throw new Error('The generated quiz could not be displayed. Please try again.');
+      }
+      setMessages((current) => [...current, { role: 'assistant', content: payload.message as string, ...(quiz ? { quiz } : {}) }]);
     } catch (submitError) {
       if (!controller.signal.aborted) {
+        setMessages((current) => current.slice(0, -1));
+        setDraft(content);
         setError(submitError instanceof Error ? submitError.message : 'The assistant is unavailable right now. Please try again.');
       }
     } finally {
@@ -137,12 +170,29 @@ export default function ChatbotWidget() {
 
           <div className="min-h-32 flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite" aria-relevant="additions text">
             {messages.map((message, index) => (
-              <p
+              <div
                 key={`${index}-${message.role}`}
-                className={`max-w-[90%] whitespace-pre-wrap rounded-xl px-3 py-2 text-sm leading-6 ${message.role === 'user' ? 'ml-auto bg-brand-600 text-white' : 'bg-slate-100 text-slate-800'}`}
+                className={`max-w-[95%] rounded-xl px-3 py-2 text-sm leading-6 ${message.role === 'user' ? 'ml-auto whitespace-pre-wrap bg-brand-600 text-white' : 'bg-slate-100 text-slate-800'}`}
               >
-                {message.content}
-              </p>
+                <p className="whitespace-pre-wrap">{message.content}</p>
+                {message.quiz && (
+                  <ol className="mt-3 space-y-4">
+                    {message.quiz.questions.map((question, questionIndex) => (
+                      <li key={`${questionIndex}-${question.question_text}`} className="border-t border-slate-300 pt-3">
+                        <p className="font-semibold">{questionIndex + 1}. {question.question_text}</p>
+                        <ol className="mt-2 list-[upper-alpha] space-y-1 pl-5">
+                          {question.options.map((option) => (
+                            <li key={option} className={option === question.correct_option ? 'font-semibold text-emerald-800' : ''}>
+                              {option}{option === question.correct_option ? ' (Correct)' : ''}
+                            </li>
+                          ))}
+                        </ol>
+                        <p className="mt-2 text-xs text-slate-600">{question.difficulty} · {question.explanation}</p>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
             ))}
             {isSending && <p className="text-sm text-slate-500" role="status">Thinking...</p>}
             {error && <p className="rounded-lg bg-rose-50 p-2 text-sm text-rose-700" role="alert">{error}</p>}

@@ -1129,15 +1129,30 @@ body {
 }
 
 .fp-back a,
-.fp-help a {
+.fp-help a,
+.fp-resend {
   color: #7950ed;
   font-weight: 800;
   text-decoration: none;
 }
 
 .fp-back a:hover,
-.fp-help a:hover {
+.fp-help a:hover,
+.fp-resend:hover:not(:disabled) {
   text-decoration: underline;
+}
+
+.fp-resend {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.fp-resend:disabled {
+  color: #7c84a4;
+  cursor: default;
 }
 
 .fp-help {

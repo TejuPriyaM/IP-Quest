@@ -25,12 +25,12 @@ export default function GreatIpMysteryPage() {
   return (
     <Region3DGame
       title="THE GREAT IP MYSTERY"
-      subtitle="Investigate the startup and protect every kind of IP"
-      description="You investigated all five areas of the startup and identified the technical invention, creative work, brand identity, confidential information, and research sources."
+      subtitle="Explore how a small business uses ideas and creative work"
+      description="Visit five rooms to learn about an invention, artwork, a brand, private information, and research sources."
       accent="from-indigo-600 via-violet-600 to-sky-700"
-      mission="Explore the startup and gather evidence from every department."
-      intro="A startup needs help sorting out five different kinds of intellectual property."
-      objective="Investigate the startup’s lab, studio, brand office, vault, and research room"
+      mission="Visit each room and learn what makes its work special."
+      intro="A small business is preparing a new product. Visit each room and learn how the team handles its work and information."
+      objective="Explore the invention room"
       objects={mysteryObjects}
       missions={mysteryMissions}
       guide="Quinn, IP investigator"

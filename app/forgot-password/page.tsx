@@ -121,77 +121,85 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main className="section-shell flex min-h-[calc(100vh-81px)] items-center justify-center py-12 sm:py-16">
-      <section className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-soft sm:p-9" aria-labelledby="recovery-heading">
-        <div className="mb-8 border-b border-slate-100 pb-7">
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Account recovery</p>
-          <h1 id="recovery-heading" className="mt-3 text-3xl font-black tracking-tight text-slate-950">
-            {step === 'complete' ? 'Password updated' : 'Forgot password?'}</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            {step === 'email' && 'Enter your account email to request a verification code.'}
+    <main className="fp-page">
+      <section className="fp-content" aria-labelledby="forgot-password-heading">
+        <div className="fp-hero">
+          <div className="fp-badge">🪄 A little help!</div>
+          <h1 id="forgot-password-heading">Lost your<br /><span>secret key?</span></h1>
+          <p>Every great inventor forgets sometimes! Let&apos;s get you back to your adventures.</p>
+          <div className="fp-emojis" aria-hidden="true">
+            <span>💡</span>
+            <span>🎨</span>
+            <span>🎵</span>
+            <span>🚀</span>
+          </div>
+          <div className="fp-tags" aria-label="Creativity, inventions, and big ideas">
+            <span>Creativity</span>
+            <span>Inventions</span>
+            <span>Big ideas</span>
+          </div>
+        </div>
+
+        <section className="fp-card" aria-labelledby="recovery-heading">
+          <div className="fp-icon" aria-hidden="true">🔐</div>
+          <span className="fp-eyebrow">ACCOUNT RECOVERY</span>
+          <h2 id="recovery-heading">{step === 'complete' ? 'Password updated' : 'Forgot your password?'}</h2>
+          <p className="fp-description">
+            {step === 'email' && 'Enter your registered email and we will send a six-digit verification code.'}
             {step === 'code' && 'Enter the six-digit code sent to your email. It expires in 10 minutes.'}
             {step === 'password' && 'Choose a new password for your account.'}
             {step === 'complete' && 'Your new password is ready to use.'}
           </p>
-        </div>
 
-        {step === 'email' && (
-          <form className="space-y-5" onSubmit={(event) => void requestCode(event)} noValidate>
-            <div>
-              <label htmlFor="recovery-email" className="mb-2 block text-sm font-semibold text-slate-700">Email</label>
-              <input id="recovery-email" type="email" autoComplete="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
-            </div>
-            {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-            <button type="submit" disabled={isSubmitting} className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60">
-              {isSubmitting ? 'Requesting code...' : 'Send verification code'}
-            </button>
-          </form>
-        )}
+          {step === 'email' && (
+            <form onSubmit={(event) => void requestCode(event)} noValidate>
+              <label htmlFor="recovery-email">Your email address</label>
+              <input id="recovery-email" type="email" autoComplete="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+              {error && <div className="fp-error" role="alert">{error}</div>}
+              <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Requesting code...' : 'Send verification code'}</button>
+            </form>
+          )}
 
-        {step === 'code' && (
-          <form className="space-y-5" onSubmit={(event) => void verifyCode(event)} noValidate>
-            <p role="status" className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice || genericConfirmation}</p>
-            <div>
-              <label htmlFor="recovery-code" className="mb-2 block text-sm font-semibold text-slate-700">Verification code</label>
-              <input id="recovery-code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-center font-mono text-lg tracking-[0.2em] text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
-            </div>
-            {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-            <button type="submit" disabled={isSubmitting || code.length !== 6} className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60">
-              {isSubmitting ? 'Verifying...' : 'Verify code'}
-            </button>
-            <button type="button" onClick={() => void requestCode()} disabled={isSubmitting || cooldown > 0} className="btn-secondary w-full disabled:cursor-not-allowed disabled:opacity-60">
-              {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
-            </button>
-            <button type="button" onClick={() => { setStep('email'); setError(''); setNotice(''); }} className="w-full text-sm font-semibold text-brand-700 hover:text-brand-800">Change email address</button>
-          </form>
-        )}
+          {step === 'code' && (
+            <>
+              <div className="fp-success" role="status">{notice || genericConfirmation}</div>
+              <form onSubmit={(event) => void verifyCode(event)} noValidate>
+                <label htmlFor="recovery-code">Verification code</label>
+                <input id="recovery-code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} />
+                {error && <div className="fp-error" role="alert">{error}</div>}
+                <button type="submit" disabled={isSubmitting || code.length !== 6}>{isSubmitting ? 'Verifying...' : 'Verify code'}</button>
+              </form>
+              <p className="fp-back">
+                <button type="button" className="fp-resend" onClick={() => void requestCode()} disabled={isSubmitting || cooldown > 0}>
+                  {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
+                </button>
+                {' · '}
+                <button type="button" className="fp-resend" onClick={() => { setStep('email'); setError(''); setNotice(''); }}>Change email</button>
+              </p>
+            </>
+          )}
 
-        {step === 'password' && (
-          <form className="space-y-5" onSubmit={(event) => void resetPassword(event)} noValidate>
-            <div>
-              <label htmlFor="new-password" className="mb-2 block text-sm font-semibold text-slate-700">New password</label>
-              <input id="new-password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
-            </div>
-            <div>
-              <label htmlFor="confirm-password" className="mb-2 block text-sm font-semibold text-slate-700">Confirm new password</label>
-              <input id="confirm-password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
-            </div>
-            {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-            <button type="submit" disabled={isSubmitting} className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60">
-              {isSubmitting ? 'Updating password...' : 'Update password'}
-            </button>
-          </form>
-        )}
+          {step === 'password' && (
+            <form onSubmit={(event) => void resetPassword(event)} noValidate>
+              <label htmlFor="new-password">New password</label>
+              <input id="new-password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} value={password} onChange={(event) => setPassword(event.target.value)} />
+              <label htmlFor="confirm-password">Confirm new password</label>
+              <input id="confirm-password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
+              {error && <div className="fp-error" role="alert">{error}</div>}
+              <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Updating password...' : 'Update password'}</button>
+            </form>
+          )}
 
-        {step === 'complete' && (
-          <div className="space-y-5">
-            <p role="status" className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</p>
-            <Link href="/login" className="btn-primary block w-full text-center">Return to log in</Link>
-          </div>
-        )}
+          {step === 'complete' && <div className="fp-success" role="status">{notice}</div>}
 
-        {step !== 'complete' && <p className="mt-6 text-center text-sm text-slate-600"><Link href="/login" className="font-bold text-brand-700 hover:text-brand-800">Back to log in</Link></p>}
+          <div className="fp-divider" aria-hidden="true">✦</div>
+          {step === 'complete'
+            ? <p className="fp-back"><Link href="/login">Return to log in</Link></p>
+            : <p className="fp-back">Remember your password? <Link href="/login">Back to Login</Link></p>}
+          <div className="fp-help">💜 Your next big idea is waiting for you!</div>
+        </section>
       </section>
+      <footer className="fp-footer">Made for curious minds <span>✦</span> IP Quest</footer>
     </main>
   );
 }

@@ -20,7 +20,7 @@ const inventionObjects: RegionObject[] = [
 ];
 
 const patentMissions: RegionMission[] = [
-  makeMission('Find the parts', 'Collect the motor, sensor, and battery.', ['motor', 'sensor', 'battery'], 'Pick up the three parts marked by a subtle glow.', 'Each part has a job in the invention.'),
+  makeMission('Find the parts', 'Collect the motor, sensor, and battery.', ['motor', 'sensor', 'battery'], 'Pick up the three glowing parts.', 'Each part has a job in the invention.'),
   makeMission('Build and test', 'Install the parts at the workbench, then test the machine.', ['bench', 'test'], 'Use the workbench to assemble the prototype. Then activate it and watch the sensor control watering.', 'The machine uses a technical mechanism to solve a real problem.'),
   makeMission('Review the invention', 'Compare the old pump, then file Nova’s invention.', ['old-machine', 'terminal'], 'See how the sensor changes the old pump’s operation, then take the technical file to the patent desk.', 'Patents may protect qualifying inventions, but legal requirements apply.'),
 ];
@@ -29,12 +29,12 @@ export default function InventionLabPage() {
   return (
     <Region3DGame
       title="PATENT LAB"
-      subtitle="Build Nova's smart irrigation machine"
-      description="Explore the lab, collect missing components, assemble the prototype, and decide what kind of IP protection best fits the invention."
+      subtitle="Help build a water-saving garden machine"
+      description="Find the missing parts, put the machine together, and test how its soil sensor saves water."
       accent="from-sky-500 via-blue-500 to-cyan-600"
-      mission="Collect the missing parts and help Professor Nova finish the prototype."
-      intro="The prototype is incomplete. Explore the room and collect the missing components."
-      objective="Find 3 missing components"
+      mission="Help Professor Nova finish and test the garden machine."
+      intro="Professor Nova is building a machine that waters plants only when the soil is dry. Help find the missing parts."
+      objective="Find the motor, sensor, and battery"
       objects={inventionObjects}
       missions={patentMissions}
       guide="Professor Nova"

@@ -86,6 +86,9 @@ export default function LoginPage() {
             <label htmlFor="password" className="mb-2 block text-sm font-semibold text-slate-700">Password</label>
             <input id="password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
           </div>
+          <div className="-mt-2 text-right">
+            <Link href="/forgot-password" className="text-sm font-semibold text-brand-700 hover:text-brand-800">Forgot Password?</Link>
+          </div>
           {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
           <button type="submit" disabled={isSubmitting} className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60">
             {isSubmitting ? 'Logging in...' : 'Log in'}

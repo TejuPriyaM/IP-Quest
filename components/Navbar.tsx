@@ -15,7 +15,6 @@ export default function Navbar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [role, setRole] = useState<UserRole | null>(null);
-  const [isTeacherSetupNeeded, setIsTeacherSetupNeeded] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLearnContext, setIsLearnContext] = useState(false);
@@ -23,28 +22,20 @@ export default function Navbar() {
   useEffect(() => {
     setIsLearnContext(new URLSearchParams(window.location.search).get('from') === 'learn');
     getCurrentProfile()
-      .then((currentProfile) => {
-        setRole(currentProfile?.role ?? null);
-        setIsTeacherSetupNeeded(currentProfile?.accountRole === 'teacher' && currentProfile.role !== 'teacher');
-      })
-      .catch(() => {
-        setRole(null);
-        setIsTeacherSetupNeeded(false);
-      });
+      .then((currentProfile) => setRole(currentProfile?.role ?? null))
+      .catch(() => setRole(null));
   }, [pathname]);
 
   const progressLink = role === 'teacher' ? '/teacher/progress' : '/progress';
   const links = role ? [
     ...publicLinks,
-    ...(isTeacherSetupNeeded
-      ? [{ href: '/teacher/setup', label: 'Teacher setup' }]
-      : [{ href: progressLink, label: 'Progress' }, { href: getRoleBasedRoute(role), label: 'Dashboard' }]),
+    { href: progressLink, label: 'Progress' },
+    { href: getRoleBasedRoute(role), label: 'Dashboard' },
   ] : [];
 
   function isActiveLink(href: string) {
     if (href === '/') return pathname === '/';
     if (href === '/learn' && isLearnContext) return true;
-    if (href === '/teacher/setup') return pathname === href;
     if (role && href === getRoleBasedRoute(role)) return pathname === href;
     return pathname === href || pathname.startsWith(`${href}/`);
   }

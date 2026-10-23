@@ -1,4 +1,6 @@
+import { Query, TablesDB, type Models } from 'appwrite';
 import { createCurrentUserJWT } from '@/lib/auth';
+import { getAppwriteClient, getAppwriteDatabaseId } from '@/lib/appwrite';
 
 export const questionsTableId = 'questions';
 
@@ -17,13 +19,26 @@ export type Question = {
 };
 
 export type QuestionInput = Omit<Question, '$id'>;
-export type QuestionKind = 'learn-level' | 'teacher-quiz' | 'lesson-assessment' | 'teacher-assessment';
+export type QuestionKind = 'learn-level' | 'teacher-quiz' | 'lesson-assessment';
+
+type QuestionRow = Models.Row & Question;
 
 export class QuestionError extends Error {
 	constructor(message: string) {
 		super(message);
 		this.name = 'QuestionError';
 	}
+}
+
+function getTablesDb() {
+	const client = getAppwriteClient();
+	const databaseId = getAppwriteDatabaseId();
+
+	if (!client || !databaseId) {
+		throw new QuestionError('Question storage is not configured yet. Please try again later.');
+	}
+
+	return { databaseId, tablesDb: new TablesDB(client) };
 }
 
 function getErrorCode(error: unknown) {
@@ -42,22 +57,6 @@ function getOperationError(error: unknown, operation: 'list' | 'get' | 'create' 
 	}
 
 	return new QuestionError(`Unable to ${operation} question${operation === 'list' ? 's' : ''}. Please try again.`);
-}
-
-async function getTeacherQuestions(parameters: Record<string, string> = {}) {
-	const jwt = await createCurrentUserJWT();
-	const query = new URLSearchParams(parameters);
-	const response = await fetch(`/api/teacher/questions${query.size ? `?${query.toString()}` : ''}`, {
-		headers: { Authorization: `Bearer ${jwt}` },
-	});
-	const payload: unknown = await response.json().catch(() => null);
-	if (!response.ok) {
-		const message = typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
-			? payload.error
-			: 'Unable to load teacher questions.';
-		throw new QuestionError(message);
-	}
-	return payload;
 }
 
 export function validateQuestionInput(data: QuestionInput, kind?: QuestionKind) {
@@ -80,9 +79,6 @@ export function validateQuestionInput(data: QuestionInput, kind?: QuestionKind) 
 	if (questionKind === 'lesson-assessment' && !lessonId) {
 		throw new QuestionError('Lesson assessment questions must be assigned to a lesson.');
 	}
-	if (questionKind === 'teacher-assessment' && (lessonId || !Number.isInteger(data.level) || (data.level as number) < 1 || (data.level as number) > 3)) {
-		throw new QuestionError('Teacher assessment questions must be assigned to Level 1, 2, or 3 without a lesson.');
-	}
 	if (questionKind === 'learn-level' && !lessonId && (!Number.isInteger(data.level) || (data.level as number) < 1 || (data.level as number) > 3)) {
 		throw new QuestionError('Learn Quiz questions must be assigned to Level 1, 2, or 3.');
 	}
@@ -91,28 +87,17 @@ export function validateQuestionInput(data: QuestionInput, kind?: QuestionKind) 
 		throw new QuestionError('Question question_text must be a non-empty string.');
 	}
 
-	if (!Array.isArray(data.options)) {
-		throw new QuestionError('Question options must be an array.');
+	if (!Array.isArray(data.options) || data.options.length !== 4 || data.options.some((option) => typeof option !== 'string' || !option.trim())) {
+		throw new QuestionError('A quiz question must have exactly four non-empty answer options.');
 	}
 
-	if (questionKind === 'teacher-assessment') {
-		if (data.options.length !== 0) {
-			throw new QuestionError('Teacher assessment questions are written-answer questions and do not use MCQ options.');
-		}
-		if (typeof data.correct_option !== 'string' || data.correct_option.trim()) {
-			throw new QuestionError('Teacher assessment questions should not require a correct option.');
-		}
-	} else {
-		if (data.options.length !== 4 || data.options.some((option) => typeof option !== 'string' || !option.trim())) {
-			throw new QuestionError('A quiz question must have exactly four non-empty answer options.');
-		}
-		const normalizedOptions = data.options.map((option) => option.trim().toLocaleLowerCase());
-		if (new Set(normalizedOptions).size !== 4) {
-			throw new QuestionError('Answer options must be distinct.');
-		}
-		if (typeof data.correct_option !== 'string' || !data.options.some((option) => option.trim() === data.correct_option.trim())) {
-			throw new QuestionError('The correct answer must match one of the four options.');
-		}
+	const normalizedOptions = data.options.map((option) => option.trim().toLocaleLowerCase());
+	if (new Set(normalizedOptions).size !== 4) {
+		throw new QuestionError('Answer options must be distinct.');
+	}
+
+	if (typeof data.correct_option !== 'string' || !data.options.some((option) => option.trim() === data.correct_option.trim())) {
+		throw new QuestionError('The correct answer must match one of the four options.');
 	}
 
 	if (typeof data.explanation !== 'string') {
@@ -169,11 +154,22 @@ async function saveQuestion(method: 'POST' | 'PATCH', body: Record<string, unkno
 
 export async function listQuestions(): Promise<Question[]> {
 	try {
-		const payload = await getTeacherQuestions();
-		if (typeof payload !== 'object' || payload === null || !('questions' in payload) || !Array.isArray(payload.questions)) {
-			throw new QuestionError('The teacher questions response was invalid.');
+		const { databaseId, tablesDb } = getTablesDb();
+		const questions: Question[] = [];
+		let cursor: string | undefined;
+
+		while (true) {
+			const response = await tablesDb.listRows<QuestionRow>({
+				databaseId,
+				tableId: questionsTableId,
+				queries: [Query.limit(100), ...(cursor ? [Query.cursorAfter(cursor)] : [])],
+			});
+			questions.push(...response.rows);
+			if (response.rows.length < 100) break;
+			cursor = response.rows[response.rows.length - 1].$id;
 		}
-		return payload.questions as Question[];
+
+		return questions;
 	} catch (error) {
 		throw getOperationError(error, 'list');
 	}
@@ -183,11 +179,13 @@ export async function getQuestion(id: string): Promise<Question> {
 	validateQuestionId(id);
 
 	try {
-		const payload = await getTeacherQuestions({ questionId: id });
-		if (typeof payload !== 'object' || payload === null || !('question' in payload)) {
-			throw new QuestionError('The teacher question response was invalid.');
-		}
-		return payload.question as Question;
+		const { databaseId, tablesDb } = getTablesDb();
+
+		return await tablesDb.getRow<QuestionRow>({
+			databaseId,
+			tableId: questionsTableId,
+			rowId: id,
+		});
 	} catch (error) {
 		throw getOperationError(error, 'get');
 	}
@@ -199,11 +197,14 @@ export async function listQuestionsByTopic(topicId: string): Promise<Question[]>
 	}
 
 	try {
-		const payload = await getTeacherQuestions({ topicId });
-		if (typeof payload !== 'object' || payload === null || !('questions' in payload) || !Array.isArray(payload.questions)) {
-			throw new QuestionError('The teacher questions response was invalid.');
-		}
-		return payload.questions as Question[];
+		const { databaseId, tablesDb } = getTablesDb();
+		const response = await tablesDb.listRows<QuestionRow>({
+			databaseId,
+			tableId: questionsTableId,
+			queries: [Query.equal('topic_id', topicId)],
+		});
+
+		return response.rows;
 	} catch (error) {
 		throw getOperationError(error, 'list');
 	}
@@ -215,11 +216,14 @@ export async function listPublishedQuestionsByTopic(topicId: string): Promise<Qu
 	}
 
 	try {
-		const payload = await getTeacherQuestions({ topicId });
-		if (typeof payload !== 'object' || payload === null || !('questions' in payload) || !Array.isArray(payload.questions)) {
-			throw new QuestionError('The teacher questions response was invalid.');
-		}
-		return (payload.questions as Question[]).filter((question) => question.is_published);
+		const { databaseId, tablesDb } = getTablesDb();
+		const response = await tablesDb.listRows<QuestionRow>({
+			databaseId,
+			tableId: questionsTableId,
+			queries: [Query.equal('topic_id', topicId), Query.equal('is_published', true)],
+		});
+
+		return response.rows;
 	} catch (error) {
 		throw getOperationError(error, 'list');
 	}

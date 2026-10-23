@@ -59,6 +59,29 @@ describe('chat API route', () => {
     expect(mocks.generateChatReply).toHaveBeenCalledWith('student-jwt', body);
   });
 
+  it('returns a validated structured quiz unchanged to the chatbot', async () => {
+    const quiz = {
+      topic: 'patent',
+      title: 'Patent',
+      questions: [{
+        question_text: 'What can a patent protect?',
+        options: ['A qualifying invention', 'A song', 'A brand name', 'A secret recipe'],
+        correct_option: 'A qualifying invention',
+        explanation: 'Patents may protect qualifying inventions.',
+        difficulty: 'Beginner',
+      }],
+    };
+    mocks.generateChatReply.mockResolvedValue({ message: 'Here is your quiz.', quiz });
+
+    const response = await POST(post(JSON.stringify({ messages: [{ role: 'user', content: 'I want a quiz on the topic of patents.' }], contextPath: '/teacher' }), {
+      Authorization: 'Bearer teacher-jwt',
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ message: 'Here is your quiz.', quiz });
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+  });
+
   it('maps safe chat errors to HTTP status codes', async () => {
     mocks.generateChatReply.mockRejectedValue(new ChatError('Approved access required.', 403));
 

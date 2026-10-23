@@ -11,7 +11,7 @@ import TechnicalAnimation from '@/components/learn/TechnicalAnimation';
 import { getCurrentProfile, type UserRole } from '@/lib/auth';
 import { listLessonsByTopic, type Lesson } from '@/lib/lessons';
 import { getLearnTopicForModule, type LearnModule } from '@/lib/learn';
-import { listPublishedLearnTopics, type TopicRow } from '@/lib/topics';
+import { listTopics, type TopicRow } from '@/lib/topics';
 
 type LearnModuleViewProps = {
   module: LearnModule;
@@ -721,7 +721,7 @@ export default function LearnModuleView({ module }: LearnModuleViewProps) {
 
     async function loadData() {
       try {
-        const topicRows = await listPublishedLearnTopics();
+        const topicRows = await listTopics();
 
         if (!isActive) {
           return;
@@ -895,7 +895,7 @@ export default function LearnModuleView({ module }: LearnModuleViewProps) {
           <div className="space-y-6">
             <AnimationStory key={module.key} story={story} />
             <TechnicalAnimation moduleKey={module.key} moduleTitle={module.title} />
-            <AnimationVideo moduleKey={module.key} />
+            <AnimationVideo />
           </div>
         );
       }

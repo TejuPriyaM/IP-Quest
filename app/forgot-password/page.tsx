@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { BookOpen, KeyRound, Lightbulb, Palette, Sparkles } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 
 type RecoveryStep = 'email' | 'code' | 'password' | 'complete';
@@ -124,14 +125,14 @@ export default function ForgotPasswordPage() {
     <main className="fp-page">
       <section className="fp-content" aria-labelledby="forgot-password-heading">
         <div className="fp-hero">
-          <div className="fp-badge">🪄 A little help!</div>
+          <div className="fp-badge"><Sparkles size={16} aria-hidden="true" /> A little help!</div>
           <h1 id="forgot-password-heading">Lost your<br /><span>secret key?</span></h1>
           <p>Every great inventor forgets sometimes! Let&apos;s get you back to your adventures.</p>
           <div className="fp-emojis" aria-hidden="true">
-            <span>💡</span>
-            <span>🎨</span>
-            <span>🎵</span>
-            <span>🚀</span>
+            <span><Lightbulb /></span>
+            <span><Palette /></span>
+            <span><BookOpen /></span>
+            <span><KeyRound /></span>
           </div>
           <div className="fp-tags" aria-label="Creativity, inventions, and big ideas">
             <span>Creativity</span>
@@ -141,7 +142,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         <section className="fp-card" aria-labelledby="recovery-heading">
-          <div className="fp-icon" aria-hidden="true">🔐</div>
+          <div className="fp-icon" aria-hidden="true"><KeyRound size={27} strokeWidth={1.8} /></div>
           <span className="fp-eyebrow">ACCOUNT RECOVERY</span>
           <h2 id="recovery-heading">{step === 'complete' ? 'Password updated' : 'Forgot your password?'}</h2>
           <p className="fp-description">

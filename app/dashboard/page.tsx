@@ -148,7 +148,7 @@ function DashboardContent() {
     : '';
 
   return (
-    <main className="section-shell py-14 sm:py-16">
+    <main className="section-shell student-dashboard-page py-14 sm:py-16">
       <SectionHeader
         title="Student dashboard"
         description="Your saved learning progress, assessment results, and next topic."

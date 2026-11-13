@@ -60,8 +60,8 @@ export default function ProfilePage() {
 
   return (
     <AuthGuard>
-      <main className="section-shell py-10 sm:py-14">
-        <section className="mx-auto max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-soft sm:p-9">
+      <main className="section-shell workspace-page py-10 sm:py-14">
+        <section className="glass-card mx-auto max-w-2xl p-6 sm:p-9">
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-7">
             <div><p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Your profile</p><h1 className="mt-2 text-3xl font-black text-slate-950">Account details</h1></div>
             {!isEditing && <button type="button" onClick={() => setIsEditing(true)} className="btn-secondary">Edit Profile</button>}

@@ -286,7 +286,7 @@ export default function TeacherQuestionsPage() {
 
   return (
     <AuthGuard allowedRoles={['teacher']}>
-      <main className="section-shell py-10 sm:py-14">
+      <main className="section-shell workspace-page py-10 sm:py-14">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Teacher workspace</p>

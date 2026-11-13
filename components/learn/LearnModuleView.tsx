@@ -2,11 +2,13 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { BookOpen, CircleAlert, CircleCheck, CircleHelp, GraduationCap, Lightbulb, Sparkles } from 'lucide-react';
 import LevelQuiz from '@/components/LevelQuiz';
 import QuizRunner from '@/components/QuizRunner';
 import LessonAssessment from '@/components/learn/LessonAssessment';
 import AnimationVideo from '@/components/learn/AnimationVideo';
 import LearnSidebar from '@/components/learn/LearnSidebar';
+import ModuleIcon from '@/components/learn/ModuleIcon';
 import TechnicalAnimation from '@/components/learn/TechnicalAnimation';
 import { getCurrentProfile, type UserRole } from '@/lib/auth';
 import { listLessonsByTopic, type Lesson } from '@/lib/lessons';
@@ -18,9 +20,23 @@ type LearnModuleViewProps = {
 };
 
 function SectionCard({ title, children, primary = false }: { title: string; children: ReactNode; primary?: boolean }) {
+  const normalizedTitle = title.toLowerCase();
+  const Icon = normalizedTitle.includes('story') || normalizedTitle.includes('summary') || normalizedTitle.includes('introduction')
+    ? BookOpen
+    : normalizedTitle.includes('problem')
+      ? CircleAlert
+      : normalizedTitle.includes('tip') || normalizedTitle.includes('example') || normalizedTitle.includes('solve') || normalizedTitle.includes('work')
+        ? Lightbulb
+        : normalizedTitle.includes('lesson') || normalizedTitle.includes('key') || normalizedTitle.includes('question') || normalizedTitle.includes('terms')
+          ? GraduationCap
+          : Sparkles;
+
   return (
-    <section className={`rounded-2xl border border-slate-200 shadow-soft ${primary ? 'bg-slate-50 p-6 sm:p-8' : 'bg-white p-5 sm:p-6'}`}>
-      <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+    <section className={`learn-section-card glass-card ${primary ? 'bg-slate-50 p-6 sm:p-8' : 'p-5 sm:p-6'}`}>
+      <h3 className="learn-section-title flex items-center gap-3 text-lg font-bold text-slate-900">
+        <span className="learn-section-icon"><Icon size={18} aria-hidden="true" strokeWidth={1.9} /></span>
+        {title}
+      </h3>
       <div className="mt-4">{children}</div>
     </section>
   );
@@ -475,7 +491,7 @@ function AnimationStory({ story }: { story: AnimationStoryData }) {
 
   return (
     <div className="space-y-4">
-      <SectionCard title="🎬 The Story" primary>
+      <SectionCard title="The Story" primary>
         <div className="flex flex-wrap gap-3">
           {story.characters.map((character) => (
             <div key={character.name} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
@@ -487,20 +503,19 @@ function AnimationStory({ story }: { story: AnimationStoryData }) {
         <p className="mt-4 text-sm leading-7 text-slate-600">{story.situation}</p>
       </SectionCard>
 
-      <SectionCard title="⚠️ The Problem">
+      <SectionCard title="The Problem">
         <div className="flex items-start gap-3 text-sm leading-7 text-slate-600">
-          <span className="text-2xl" aria-hidden="true">⚠️</span>
           <p>{story.problem}</p>
         </div>
       </SectionCard>
 
-      <SectionCard title="🔍 Identify the IP Issue">
+      <SectionCard title="Identify the IP Issue">
         <p className="text-sm leading-7 text-slate-600">
           <strong className="text-slate-900">IP Issue: {story.issueTitle}.</strong> {story.issue}
         </p>
       </SectionCard>
 
-      <SectionCard title="💡 How to Solve It">
+      <SectionCard title="How to Solve It">
         <ol className="space-y-2">
           {story.solutionSteps.map((step, index) => (
             <li key={step} aria-current={activeStep === index ? 'step' : undefined} className={`flex items-start gap-3 rounded-xl border p-3 transition-colors duration-500 ${activeStep === index ? 'border-brand-300 bg-brand-50' : 'border-transparent bg-white/70'}`}>
@@ -534,7 +549,7 @@ function AnimationStory({ story }: { story: AnimationStoryData }) {
         </div>
       </SectionCard>
 
-      <SectionCard title="✅ Final Outcome">
+      <SectionCard title="Final Outcome">
         <p className="text-sm leading-7 text-slate-600">{story.outcome}</p>
       </SectionCard>
     </div>
@@ -620,7 +635,7 @@ function FlashCards({ module }: { module: LearnModule }) {
       <section className="overflow-hidden rounded-[28px] border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-amber-50 p-4 shadow-sm sm:p-6 lg:p-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-bold text-slate-800">{module.icon} {module.title} revision</p>
+            <p className="flex items-center gap-2 text-sm font-bold text-slate-800"><ModuleIcon moduleKey={module.key} className="h-4 w-4 text-brand-600" />{module.title} revision</p>
             <p aria-live="polite" className="mt-1 text-sm font-medium text-slate-500">Card {cardIndex + 1} / {cards.length}</p>
           </div>
           <span className="rounded-full border border-white bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm">
@@ -638,7 +653,7 @@ function FlashCards({ module }: { module: LearnModule }) {
             <span className={`relative flex min-h-[300px] w-full transition-transform duration-500 [transform-style:preserve-3d] motion-reduce:transition-none sm:min-h-[340px] lg:min-h-[360px] ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}>
               <span className="absolute inset-0 flex min-h-full flex-col justify-between rounded-[24px] border border-white/80 bg-gradient-to-br from-white via-white to-sky-50 p-6 shadow-[0_16px_40px_-20px_rgba(15,23,42,0.35)] transition-shadow group-hover:shadow-[0_22px_48px_-20px_rgba(15,23,42,0.4)] [backface-visibility:hidden] sm:p-9 lg:p-12">
                 <span className="flex items-center justify-between gap-4">
-                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-2xl" aria-hidden="true">❔</span>
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-brand-100 text-brand-700" aria-hidden="true"><CircleHelp size={19} /></span>
                   <span className="text-xs font-bold uppercase text-sky-700">Question</span>
                 </span>
                 <span className="py-6 text-2xl font-bold leading-snug text-slate-900 sm:text-3xl sm:leading-snug">{currentCard.front}</span>
@@ -646,7 +661,7 @@ function FlashCards({ module }: { module: LearnModule }) {
               </span>
               <span className="absolute inset-0 flex min-h-full flex-col justify-between rounded-[24px] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-6 shadow-[0_16px_40px_-20px_rgba(15,23,42,0.35)] [backface-visibility:hidden] [transform:rotateY(180deg)] sm:p-9 lg:p-12">
                 <span className="flex items-center justify-between gap-4">
-                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-2xl" aria-hidden="true">✓</span>
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-accent-100 text-accent-700" aria-hidden="true"><CircleCheck size={19} /></span>
                   <span className="text-xs font-bold uppercase text-emerald-700">Answer</span>
                 </span>
                 <span className="py-6 text-xl font-semibold leading-relaxed text-slate-800 sm:text-2xl">{currentCard.back}</span>
@@ -895,7 +910,7 @@ export default function LearnModuleView({ module }: LearnModuleViewProps) {
           <div className="space-y-6">
             <AnimationStory key={module.key} story={story} />
             <TechnicalAnimation moduleKey={module.key} moduleTitle={module.title} />
-            <AnimationVideo />
+            <AnimationVideo moduleKey={module.key} />
           </div>
         );
       }
@@ -986,7 +1001,7 @@ export default function LearnModuleView({ module }: LearnModuleViewProps) {
 
   if (isLoading) {
     return (
-      <main className="section-shell py-10 sm:py-14">
+      <main className="section-shell learn-experience py-10 sm:py-14">
         <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
           <LearnSidebar activeSlug={module.slug} />
           <div className="glass-card p-6 text-sm text-slate-500" aria-busy="true">Loading {module.title} learning content...</div>
@@ -996,26 +1011,26 @@ export default function LearnModuleView({ module }: LearnModuleViewProps) {
   }
 
   return (
-    <main className="section-shell py-10 sm:py-14">
+    <main className="section-shell learn-experience py-10 sm:py-14">
       <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
         <LearnSidebar activeSlug={module.slug} />
 
         <div className="min-w-0 space-y-6">
-          <section className="rounded-[32px] border border-slate-200 bg-gradient-to-br from-brand-50 via-white to-indigo-50 p-6 shadow-soft sm:p-8">
+          <section className="learn-module-hero rounded-panel border border-slate-200 bg-gradient-to-br from-brand-50 via-white to-accent-50 p-6 shadow-soft sm:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Learning module</p>
                 <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{module.title}</h1>
               </div>
-              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-3xl shadow-sm" aria-hidden="true">
-                {module.icon}
+              <span className="learn-module-icon flex h-14 w-14 items-center justify-center rounded-xl bg-white text-brand-700 shadow-sm" aria-hidden="true">
+                <ModuleIcon moduleKey={module.key} className="h-7 w-7" />
               </span>
             </div>
             <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">{module.description}</p>
           </section>
 
           <div className="space-y-6">
-            <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-soft sm:p-5">
+            <section className="learn-tabs-panel glass-card p-4 sm:p-5">
               <div className="overflow-x-auto pb-1">
                 <nav className="flex min-w-max gap-2" aria-label="Learning section navigation">
                   {SECTION_TABS.map((section) => {

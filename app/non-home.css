@@ -1,0 +1,301 @@
+main.section-shell {
+  --page-surface: #fff;
+  --page-border: #cbd2e1;
+  --page-muted-surface: #f2f4fa;
+}
+
+main.section-shell .glass-card {
+  border: 1px solid var(--page-border);
+  border-radius: 14px;
+  background-color: var(--page-surface);
+  box-shadow: 0 9px 26px rgba(35, 40, 76, 0.075);
+}
+
+main.section-shell .glass-card > h2,
+main.section-shell .glass-card > h3 {
+  color: #252747;
+}
+
+main.section-shell input:not([type='checkbox']):not([type='radio']):not([type='range']),
+main.section-shell select,
+main.section-shell textarea {
+  border-color: #c8cede;
+  border-radius: 10px;
+  background-color: #fff;
+}
+
+main.section-shell input:not([type='checkbox']):not([type='radio']):not([type='range']):focus,
+main.section-shell select:focus,
+main.section-shell textarea:focus {
+  border-color: #7069e8;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+}
+
+main.section-shell table {
+  overflow: hidden;
+  border: 1px solid #d6dbea;
+  border-radius: 12px;
+  background: #fff;
+}
+
+main.section-shell table thead {
+  background: #eef0f8;
+}
+
+main.section-shell table th {
+  color: #484e69;
+  font-weight: 800;
+}
+
+main.section-shell table tbody tr:hover {
+  background: #f4f6fb;
+}
+
+.metric-icon {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border: 1px solid #d7d9f1;
+  border-radius: 9px;
+  background: #f0efff;
+  color: #5148bf;
+}
+
+.metric-tone-green .metric-icon { border-color: #bfe5dc; background: #e8f8f3; color: #117365; }
+.metric-tone-amber .metric-icon { border-color: #f1dfbb; background: #fff7e6; color: #9b6217; }
+.metric-tone-violet .metric-icon { border-color: #d8d1f1; background: #f3f0ff; color: #6550b8; }
+
+main.section-shell .workspace-hero {
+  border: 1px solid rgba(201, 204, 241, 0.3);
+  border-radius: 14px;
+  background: linear-gradient(115deg, #232447 0%, #343866 68%, #176e68 100%);
+  box-shadow: 0 14px 34px rgba(35, 40, 76, 0.12);
+}
+
+main.section-shell.learn-experience .glass-card,
+main.section-shell.learn-experience .learn-section-card {
+  border: 2px solid #bdc7da;
+  border-radius: 14px;
+  background-color: #fff;
+  box-shadow: 0 8px 24px rgba(40, 48, 84, 0.075);
+}
+
+main.section-shell.learn-experience .learn-section-card {
+  padding: 20px;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+main.section-shell.learn-experience .learn-section-card:hover {
+  transform: translateY(-1px);
+  border-color: #9da6d8;
+  box-shadow: 0 13px 30px rgba(40, 48, 84, 0.11);
+}
+
+main.section-shell.learn-experience .learn-section-card.bg-slate-50 {
+  background: linear-gradient(135deg, #f1f2ff, #fff 75%);
+}
+
+.learn-section-title {
+  min-height: 36px;
+  color: #252747;
+}
+
+.learn-section-icon {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border: 1px solid #d6d6f8;
+  border-radius: 10px;
+  background: #f0efff;
+  color: #5148bf;
+}
+
+.learn-section-card:nth-of-type(2n) .learn-section-icon {
+  border-color: #bfe5dc;
+  background: #e8f8f3;
+  color: #117365;
+}
+
+.learn-module-hero {
+  border: 2px solid #bdc7da;
+  border-radius: 14px;
+  background: linear-gradient(120deg, #eef1ff, #fff 62%, #e8f8f5);
+}
+
+.learn-tabs-panel {
+  border: 2px solid #bdc7da;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(40, 48, 84, 0.075);
+}
+
+main.section-shell.learn-experience .learn-sidebar .glass-card {
+  border: 2px solid #bdc7da;
+  border-radius: 14px;
+  background: #f9faff;
+}
+
+.learn-sidebar a {
+  min-height: 48px;
+  border-radius: 10px;
+  border-color: #d3d9e7;
+  transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+.learn-sidebar a:hover {
+  transform: translateX(2px);
+  border-color: #9da6d8;
+}
+
+.learn-sidebar a[aria-current='page'] {
+  border-color: #7772dc;
+  background: #eeedff;
+  box-shadow: inset 3px 0 #5148bf;
+}
+
+.learn-sidebar-icon {
+  border: 1px solid #e1e4ef;
+}
+
+.learn-experience .lesson-reading {
+  border-width: 1.5px;
+  border-color: #c6cfdf;
+  background: #fff;
+}
+
+.learn-experience .lesson-reading > div {
+  max-width: 72ch;
+  color: #424762;
+}
+
+.login-page .login-card,
+.fp-page .fp-card {
+  border: 1.5px solid #d5d9e8;
+  border-radius: 14px;
+  box-shadow: 0 18px 42px rgba(35, 40, 76, 0.13);
+}
+
+.login-page .login-heading,
+.fp-page .fp-card > .fp-eyebrow {
+  border-color: #e1e4ef;
+}
+
+.login-page .login-input,
+.fp-page .fp-card form input {
+  border: 1px solid #c8cede;
+  border-radius: 10px;
+  background: #fbfcff;
+}
+
+.login-page .login-input:focus,
+.fp-page .fp-card form input:focus {
+  border-color: #7069e8;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+  transform: none;
+}
+
+.login-page .login-button,
+.fp-page .fp-card form button:not(.fp-resend) {
+  min-height: 46px;
+  border-radius: 10px;
+  background: #4f46e5;
+  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.17);
+}
+
+.login-page .login-button:hover:not(:disabled),
+.fp-page .fp-card form button:not(.fp-resend):hover:not(:disabled) {
+  background: #3730a3;
+}
+
+.login-page .role-option,
+.fp-page .fp-card .fp-success,
+.fp-page .fp-card .fp-error {
+  border-radius: 10px;
+}
+
+.login-page .art-item svg,
+.fp-page .fp-emojis svg {
+  width: 28px;
+  height: 28px;
+  stroke-width: 1.8;
+}
+
+.fp-page .fp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fp-page .fp-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.fp-page .fp-card form button.fp-resend {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #4338ca;
+}
+
+.fp-page .fp-card form button.fp-resend:disabled {
+  color: #777c93;
+}
+
+.fp-page .fp-card .fp-back button {
+  width: auto;
+}
+
+#ip-quest-gamification {
+  border-top: 1px solid #d9deeb;
+}
+
+#ip-quest-gamification .bg-slate-50 {
+  background-color: #f3f5fa;
+}
+
+#ip-quest-gamification button:focus-visible,
+#ip-quest-gamification select:focus-visible,
+#ip-quest-gamification a:focus-visible {
+  outline: 3px solid #7772dc;
+  outline-offset: 3px;
+}
+
+.region-game-shell {
+  background: #171a31;
+}
+
+.region-game-shell :is(section, article, [role='dialog']) {
+  border-color: rgba(203, 210, 225, 0.28);
+}
+
+@media (max-width: 640px) {
+  .learn-experience .learn-section-card {
+    padding: 16px;
+  }
+
+  main.section-shell table {
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learn-experience .learn-section-card,
+  .learn-sidebar a,
+  .fp-page *,
+  .login-page *,
+  #ip-quest-gamification * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,7 +1,9 @@
 import './globals.css';
+import './non-home.css';
 import type { Metadata } from 'next';
 import Navbar from '@/components/Navbar';
 import ChatbotWidget from '@/components/ChatbotWidget';
+import SiteFooter from '@/components/SiteFooter';
 
 export const metadata: Metadata = {
   title: 'IP Quest',
@@ -14,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <Navbar />
         {children}
+        <SiteFooter />
         <ChatbotWidget />
       </body>
     </html>

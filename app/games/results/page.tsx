@@ -137,7 +137,7 @@ function MistakeReview({ mistakes }: { mistakes: QuizMistake[] }) {
 }
 
 export default function ResultsPage() {
-  return <Suspense fallback={<main className="section-shell py-10 sm:py-14"><p className="text-slate-600">Loading results...</p></main>}><ResultsContent /></Suspense>;
+  return <Suspense fallback={<main className="section-shell workspace-page py-10 sm:py-14"><p className="text-slate-600">Loading results...</p></main>}><ResultsContent /></Suspense>;
 }
 
 function ResultsContent() {
@@ -232,12 +232,12 @@ function ResultsContent() {
   }, [attemptId, mode, topicId]);
 
   if (isLoading || (result !== null && 'attemptId' in result && result.attemptId !== attemptId)) {
-    return <main className="section-shell py-10 sm:py-14"><p className="glass-card mx-auto max-w-2xl p-6 text-slate-600" role="status">Loading results...</p></main>;
+    return <main className="section-shell workspace-page py-10 sm:py-14"><p className="glass-card mx-auto max-w-2xl p-6 text-slate-600" role="status">Loading results...</p></main>;
   }
 
   if (error || !result) {
     return (
-      <main className="section-shell py-10 sm:py-14">
+      <main className="section-shell workspace-page py-10 sm:py-14">
         <section className="glass-card mx-auto max-w-2xl p-6 sm:p-8 text-center" role="alert">
           <h1 className="text-2xl font-bold text-slate-900">Result unavailable</h1>
           <p className="mt-3 text-slate-600">{error ?? 'We could not load this quiz result.'}</p>
@@ -250,7 +250,7 @@ function ResultsContent() {
   if ('overall' in result) {
     const retryHref = `/games/quiz?topic=${encodeURIComponent(result.topicId)}&level=3`;
     return (
-      <main className="section-shell py-10 sm:py-14">
+      <main className="section-shell workspace-page py-10 sm:py-14">
         <section className="mx-auto max-w-3xl text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Topic complete</p>
           <h1 className="mt-3 text-3xl font-bold text-slate-900 sm:text-4xl">{result.topicTitle} Quiz Complete</h1>
@@ -286,7 +286,7 @@ function ResultsContent() {
     const retryHref = `/games/quiz?topic=${encodeURIComponent(result.topicId)}&level=${result.level}`;
     const nextLevelHref = `/games/quiz?topic=${encodeURIComponent(result.topicId)}&level=${result.level + 1}`;
     return (
-      <main className="section-shell py-10 sm:py-14">
+      <main className="section-shell workspace-page py-10 sm:py-14">
         <section className="mx-auto max-w-3xl text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Level {result.level} complete</p>
           <h1 className="mt-3 text-3xl font-bold text-slate-900 sm:text-4xl">{topic?.title ?? 'Quiz'} · Level {result.level}</h1>
@@ -315,7 +315,7 @@ function ResultsContent() {
   const topic = topics.find((item) => item.$id === result.topicId);
 
   return (
-    <main className="section-shell py-10 sm:py-14">
+    <main className="section-shell workspace-page py-10 sm:py-14">
       <section className="mx-auto max-w-2xl text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Quiz complete</p>
         <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">

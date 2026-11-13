@@ -1,97 +1,69 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
+import { ArrowRight, BookOpen, Gamepad2, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import StudentTopicCard from '@/components/StudentTopicCard';
 import SectionHeader from '@/components/SectionHeader';
 import { listTopics, type TopicRow } from '@/lib/topics';
 
-const questHighlights = [
-  { label: 'Levels', value: '6', detail: 'From Explorer to Master' },
-  { label: 'Regions', value: '5', detail: 'Each with its own challenge' },
-  { label: 'Badges', value: '12', detail: 'Earned through gameplay' },
-];
-
 export default function HomePage() {
   const [topics, setTopics] = useState<TopicRow[]>([]);
   const [isLoadingTopics, setIsLoadingTopics] = useState(true);
+  const [topicError, setTopicError] = useState('');
 
   useEffect(() => {
     listTopics()
       .then((rows) => setTopics(rows.filter((topic) => topic.is_published === true)))
-      .catch(() => setTopics([]))
+      .catch((error) => setTopicError(error instanceof Error ? error.message : 'Unable to load learning topics.'))
       .finally(() => setIsLoadingTopics(false));
   }, []);
 
   return (
     <main>
-      <section className="section-shell grid items-center gap-10 py-16 sm:py-20 lg:grid-cols-[1.2fr_0.8fr] lg:py-28">
-        <div>
-          <span className="inline-flex rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">
-            Learn. Create. Protect.
-          </span>
-          <h1 className="mt-6 max-w-xl text-4xl font-black tracking-tight text-slate-900 sm:text-5xl">
-            Become an IP Guardian and protect ideas across the world of IP Quest.
-          </h1>
-          <p className="mt-5 max-w-xl text-lg text-slate-600">
-            Explore the five regions of IP Quest, complete missions, and learn how patents, copyrights, trademarks, trade secrets, and plagiarism rules apply in real life.
-          </p>
-          <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-            <Link href="/games" className="btn-primary">
-              Start the quest
-            </Link>
-            <Link href="/learn" className="btn-secondary">
-              Explore lessons
-            </Link>
+      <section className="home-hero">
+        <div className="section-shell home-hero-inner">
+          <div className="home-copy">
+            <p className="home-eyebrow"><Sparkles size={15} aria-hidden="true" /> Learn · Create · Protect</p>
+            <h1>IP Quest</h1>
+            <p className="home-lede">Big ideas start here. Discover how inventions, stories, names, and creative work are protected.</p>
+            <div className="home-actions">
+              <Link href="/learn" className="btn-primary">Start learning <ArrowRight size={17} aria-hidden="true" /></Link>
+              <Link href="/games" className="btn-secondary"><Gamepad2 size={17} aria-hidden="true" /> Play an adventure</Link>
+            </div>
+            <div className="home-pill-row" aria-label="Explore the learning journey">
+              <span><BookOpen size={15} aria-hidden="true" /> Real-world lessons</span>
+              <span><Gamepad2 size={15} aria-hidden="true" /> Interactive games</span>
+            </div>
           </div>
 
-          <dl className="mt-10 grid max-w-md grid-cols-3 gap-4">
-            {questHighlights.map((item) => (
-              <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <dt className="text-xs uppercase tracking-wide text-slate-500">{item.label}</dt>
-                <dd className="mt-2 text-2xl font-bold text-slate-900">{item.value}</dd>
-                <dd className="mt-1 text-[11px] text-slate-500">{item.detail}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-
-        <div className="glass-card overflow-hidden p-6 sm:p-8">
-          <div className="rounded-2xl bg-gradient-to-br from-brand-600 to-brand-900 p-6 text-white">
-            <p className="text-sm uppercase tracking-[0.2em] text-blue-100">Current mission</p>
-            <h2 className="mt-4 text-3xl font-bold">Protect the invention before the thieves arrive.</h2>
-            <p className="mt-3 text-sm leading-6 text-blue-50">
-              Students investigate what qualifies for patent protection, compare similar ideas, and decide how to protect their creations.
-            </p>
-          </div>
-
-          <div className="mt-6 space-y-4">
-            {[
-              { title: 'Patent Lab', detail: 'Invent and compare new devices', accent: 'bg-blue-50 text-blue-700' },
-              { title: 'Creator Studio', detail: 'Protect art, music, and stories', accent: 'bg-pink-50 text-pink-700' },
-              { title: 'Brand City', detail: 'Recognise logos and brands', accent: 'bg-violet-50 text-violet-700' },
-            ].map((item) => (
-              <div key={item.title} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <div>
-                  <p className="font-semibold text-slate-800">{item.title}</p>
-                  <p className="text-xs text-slate-500">{item.detail}</p>
-                </div>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.accent}`}>
-                  Ready
-                </span>
-              </div>
-            ))}
+          <div className="home-visual" aria-label="IP Quest: Explore, learn, build a safer tomorrow">
+            <div className="home-visual-top"><span>THE CREATOR TOOLKIT</span><span>01 / IDEAS</span></div>
+            <Image src="/logo-mark.png" alt="IP Quest compass and lightbulb mark" width={430} height={300} priority className="home-logo-art" />
+            <div className="home-visual-bottom">
+              <p>Think it up. Make it yours.</p>
+              <span>Learn to respect the ideas around you.</span>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="section-shell pb-16">
-        <SectionHeader title="Featured learning paths" description="Build confidence in creating, respecting, and protecting original ideas in everyday life." />
-        <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {topics.map((topic) => (
-            <StudentTopicCard key={topic.$id} topic={topic} />
-          ))}
-        </div>
+      <section className="section-shell home-learning-section">
+        <SectionHeader level={2} eyebrow="Published modules" title="Find your next big idea" description="Explore lessons and practice with the topics published by your learning community." />
+        {topicError && <p className="status-error" role="alert">{topicError}</p>}
+        {isLoadingTopics ? (
+          <p className="glass-card p-6 text-sm text-slate-600" role="status" aria-busy="true">Loading published topics...</p>
+        ) : topics.length > 0 ? (
+          <div className="home-topic-grid">
+            {topics.map((topic) => <StudentTopicCard key={topic.$id} topic={topic} />)}
+          </div>
+        ) : !topicError ? (
+          <div className="empty-state">
+            <BookOpen size={22} aria-hidden="true" />
+            <p>No published learning topics are available yet.</p>
+          </div>
+        ) : null}
       </section>
     </main>
   );

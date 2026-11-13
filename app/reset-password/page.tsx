@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { BookOpen, KeyRound, Lightbulb, Palette, Sparkles } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 import { completePasswordRecovery } from '@/lib/auth';
 
@@ -62,14 +63,14 @@ export default function ResetPasswordPage() {
     <main className="fp-page">
       <section className="fp-content" aria-labelledby="reset-password-heading">
         <div className="fp-hero">
-          <div className="fp-badge">🪄 Almost there!</div>
+          <div className="fp-badge"><Sparkles size={16} aria-hidden="true" /> Almost there!</div>
           <h1>Make a<br /><span>fresh start.</span></h1>
           <p>Choose a new password and get back to exploring your next big idea.</p>
           <div className="fp-emojis" aria-hidden="true">
-            <span>💡</span>
-            <span>🎨</span>
-            <span>🎵</span>
-            <span>🚀</span>
+            <span><Lightbulb /></span>
+            <span><Palette /></span>
+            <span><BookOpen /></span>
+            <span><KeyRound /></span>
           </div>
           <div className="fp-tags" aria-label="Creativity, inventions, and big ideas">
             <span>Creativity</span>
@@ -79,7 +80,7 @@ export default function ResetPasswordPage() {
         </div>
 
         <section className="fp-card" aria-labelledby="reset-password-heading">
-          <div className="fp-icon" aria-hidden="true">🔐</div>
+          <div className="fp-icon" aria-hidden="true"><KeyRound size={27} strokeWidth={1.8} /></div>
           <span className="fp-eyebrow">ACCOUNT RECOVERY</span>
           <h2 id="reset-password-heading">Create a new password</h2>
           <p className="fp-description">Choose a new password for your IP Quest account.</p>

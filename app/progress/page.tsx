@@ -237,7 +237,7 @@ export default function ProgressPage() {
 
   return (
     <AuthGuard allowedRoles={['student']}>
-      <main className="section-shell py-10 sm:py-14">
+      <main className="section-shell workspace-page py-10 sm:py-14">
         <SectionHeader title="Learning Progress" description="Review your saved quiz scores and lesson assessment results over time." />
         {error && <p className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">{error}</p>}
         {isLoading ? <p className="glass-card mt-8 p-6 text-sm text-slate-600" role="status">Loading your results...</p> : !history ? <p className="glass-card mt-8 p-6 text-sm text-slate-600">Performance history is unavailable.</p> : (

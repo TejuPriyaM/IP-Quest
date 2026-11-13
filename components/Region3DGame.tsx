@@ -1069,7 +1069,7 @@ export default function Region3DGame({
   };
 
   return (
-    <main ref={gameRootRef} className="fixed inset-0 z-[100] flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-950 text-white">
+    <main ref={gameRootRef} className="region-game-shell fixed inset-0 z-[100] flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-950 text-white">
       <header className="relative z-20 flex min-h-14 items-center justify-between gap-3 border-b border-white/10 bg-slate-950/85 px-3 py-2 backdrop-blur sm:px-6">
         <div className="min-w-0">
           <p className="truncate text-xs font-black uppercase tracking-[0.18em] text-sky-300">{title}</p>

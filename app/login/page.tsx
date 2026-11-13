@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Lightbulb, Music2, Palette, Rocket } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentDestination, getCurrentProfile, login, logout, matchesLoginRole, type UserRole } from '@/lib/auth';
@@ -65,10 +66,10 @@ export default function LoginPage() {
           <h1 id="welcome-heading">Make your mark. <span className="highlight">Protect your ideas.</span></h1>
           <p>Discover the clever creations, stories, and inventions that make our world more interesting.</p>
           <div className="adventure-art" aria-hidden="true">
-            <span className="art-item">💡</span>
-            <span className="art-item">🎨</span>
-            <span className="art-item">🎵</span>
-            <span className="art-item">🚀</span>
+            <span className="art-item"><Lightbulb /></span>
+            <span className="art-item"><Palette /></span>
+            <span className="art-item"><Music2 /></span>
+            <span className="art-item"><Rocket /></span>
           </div>
           <div className="learning-tags" aria-label="Explore creativity, inventions, and ideas">
             <span>Creativity</span>
@@ -79,7 +80,7 @@ export default function LoginPage() {
         <section className="login-card" aria-labelledby="login-heading">
           <div className="login-heading">
             <p className="eyebrow">Welcome back</p>
-            <h1 id="login-heading">Log in to IP Quest</h1>
+            <h2 id="login-heading">Log in to IP Quest</h2>
             <p className="subtitle">Pick up where your ideas left off.</p>
           </div>
 

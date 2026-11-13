@@ -135,7 +135,7 @@ export default function TeacherProgressPage() {
 
   return (
     <AuthGuard allowedRoles={['teacher']}>
-      <main className="section-shell py-10 sm:py-14">
+      <main className="section-shell workspace-page py-10 sm:py-14">
         <SectionHeader title="Student Progress" description="Review authorized quiz and lesson assessment results." />
         <form onSubmit={searchStudent} className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex shrink-0 gap-2" role="group" aria-label="Student action">

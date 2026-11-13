@@ -25,7 +25,7 @@ const ACTIVITIES = [
 ];
 
 const selectClassName =
-  'min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-[#0e2038] shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200';
+  'min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-[#222442] shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
 
 export const HeaderNav = ({
   activeRealm,
@@ -58,7 +58,7 @@ export const HeaderNav = ({
         >
           <IPQuestBadge size={48} className="transition-transform group-hover:scale-105" />
           <span className="flex flex-col leading-tight">
-            <span className="text-lg font-black tracking-tight text-[#0e2038] sm:text-xl">
+            <span className="text-lg font-black tracking-tight text-[#222442] sm:text-xl">
               <span className="text-amber-500">IP</span> Quest
             </span>
             <span className="hidden text-[9px] font-semibold tracking-wide text-slate-500 sm:block">
@@ -115,8 +115,8 @@ export const HeaderNav = ({
               aria-current={isDashboardActive ? 'page' : undefined}
               className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition ${
                 isDashboardActive
-                  ? 'border-amber-300 bg-amber-100 text-amber-950'
-                  : 'border-slate-200 bg-white text-[#0e2038] hover:border-amber-300 hover:bg-amber-50'
+                  ? 'border-brand-200 bg-brand-50 text-brand-900'
+                    : 'border-slate-200 bg-white text-[#222442] hover:border-brand-200 hover:bg-brand-50'
               }`}
             >
               <BarChart3 className="h-4 w-4 text-amber-600" />

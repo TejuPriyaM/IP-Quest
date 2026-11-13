@@ -1,12 +1,5 @@
 import { NextResponse } from 'next/server';
-import {
-  createTeacherQuestion,
-  deleteTeacherQuestion,
-  getTeacherQuestion,
-  listTeacherQuestions,
-  TeacherQuestionError,
-  updateTeacherQuestion,
-} from '@/lib/server/teacher-questions';
+import { createTeacherQuestion, deleteTeacherQuestion, TeacherQuestionError, updateTeacherQuestion } from '@/lib/server/teacher-questions';
 import type { QuestionKind } from '@/lib/questions';
 
 function getBearerToken(request: Request) {
@@ -34,7 +27,7 @@ async function getBody(request: Request) {
 
 function getQuestionKind(value: unknown): QuestionKind | null | undefined {
   if (value === undefined) return undefined;
-  if (value === 'learn-level' || value === 'teacher-quiz' || value === 'lesson-assessment' || value === 'teacher-assessment') return value;
+  if (value === 'learn-level' || value === 'teacher-quiz' || value === 'lesson-assessment') return value;
   return null;
 }
 
@@ -49,21 +42,6 @@ export async function POST(request: Request) {
   try {
     const question = await createTeacherQuestion(jwt, body.question, kind);
     return NextResponse.json(question, { status: 201 });
-  } catch (error) {
-    return getErrorResponse(error);
-  }
-}
-
-export async function GET(request: Request) {
-  const jwt = getBearerToken(request);
-  if (!jwt) return NextResponse.json({ error: 'Authentication is required.' }, { status: 401 });
-  const parameters = new URL(request.url).searchParams;
-  const questionId = parameters.get('questionId');
-  const topicId = parameters.get('topicId') ?? undefined;
-
-  try {
-    if (questionId) return NextResponse.json({ question: await getTeacherQuestion(jwt, questionId) });
-    return NextResponse.json({ questions: await listTeacherQuestions(jwt, topicId) });
   } catch (error) {
     return getErrorResponse(error);
   }

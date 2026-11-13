@@ -1,169 +1,44 @@
-# UI Design System
+# IP Quest UI Design System
 
-## Product Identity
+## Direction
 
-Application Name: IP Quest
+IP Quest uses a polished educational product interface: friendly for students, clear for teachers, and restrained for administration. The Next.js app uses Tailwind utilities plus shared CSS tokens in `app/globals.css`; the mounted Gamification app is scoped under `#ip-quest-gamification` and uses the same palette without sharing its gameplay styles.
 
-Design Personality:
-- Modern
-- Interactive
-- Educational
-- Friendly
-- Professional
-- Suitable for school students
+## Tokens
 
-The interface should look like a modern educational gaming platform rather than a basic CRUD dashboard.
+- Primary: indigo `#4f46e5`; strong primary `#3730a3`.
+- Secondary: turquoise `#16a995`; deep turquoise `#11675f`.
+- Warm accent: gold `#eea83a`, reserved for highlights and game rewards.
+- Supporting violet: `#8066df`; use sparingly.
+- Background: `#f5f7fc`; surface: `#ffffff`; soft surface: `#f0f2fa`.
+- Text: `#222442`; muted text: `#626781`; border: `#e2e5f0`.
+- Success: `#0e8175`; warning: `#b76a16`; error: `#b52f4a`.
+- Body type: Plus Jakarta Sans; display type: Outfit.
+- Standard card radius: 14px; control radius: 10px.
+- Card shadow: `0 12px 32px rgba(38, 44, 91, 0.08)`; raised shadow: `0 18px 42px rgba(38, 44, 91, 0.13)`.
 
-## Visual Direction
+Tailwind colors, typography, shadows, and radii are defined in `tailwind.config.ts`. Use `btn-primary`, `btn-secondary`, `glass-card`, `section-shell`, `status-error`, `status-success`, and `status-warning` for common patterns.
 
-Use a clean, polished interface with:
-- Spacious layouts
-- Rounded cards
-- Soft background gradients
-- Strong visual hierarchy
-- Topic-specific icons
-- Subtle hover animations
-- Clear calls to action
-- Progress indicators
-- Game-inspired visual elements
+## Layout
 
-Avoid:
-- Plain text-only cards
-- Excessive empty space
-- Overly complicated animations
-- Too many colors
-- Crowded layouts
-- Generic dashboard styling
+- The root layout provides the responsive sticky navigation, page content, shared footer, and assistant.
+- Use `section-shell` for a consistent maximum width and responsive horizontal padding.
+- Use `SectionHeader` for route titles; it renders an H1 by default. Set `level={2}` for nested sections.
+- Use `workspace-page` for student, teacher, and administrator work areas. Use `learn-experience` for lesson routes.
+- The site footer is omitted in `/games` so the immersive game interface retains its own shell.
 
-## Color Direction
+## Interaction
 
-Primary:
-- Blue or indigo for learning and trust
+- Buttons, links, inputs, selects, and textareas have visible focus indicators.
+- Inputs and validation stay connected to their existing state handlers and API calls.
+- Use `role="status"` for progress/success and `role="alert"` for errors. Do not rely on color alone.
+- Respect reduced-motion preferences. Keep transitions short and avoid movement that shifts page layout.
+- At narrow widths, the main navigation collapses to a keyboard-accessible menu. Tables remain horizontally scrollable where columns cannot fit.
 
-Supporting:
-- Green for completed learning
-- Yellow or orange for intermediate difficulty
-- Purple for creativity and innovation
-- Red or pink only for warnings or special highlights
+## Data and Access
 
-Use a consistent color palette throughout the application.
-
-## Typography
-
-Use a modern sans-serif font.
-
-Hierarchy:
-- Large, bold page headings
-- Clear section headings
-- Readable body text
-- Medium-weight navigation labels
-- Distinct labels for metadata
-
-The main heading must not be hidden behind the navigation bar.
-
-## Navigation
-
-Desktop navigation order:
-
-1. Home
-2. Learn
-3. Games
-4. Progress
-5. Dashboard
-
-Navigation requirements:
-- Keep the logo on the left.
-- Keep navigation links grouped in the center.
-- Keep the primary CTA on the right.
-- Use consistent horizontal spacing.
-- Highlight the current route.
-- Add a mobile menu for small screens.
-- Make the navbar sticky only if it does not cover page content.
-- Add sufficient top padding to every page below a fixed navbar.
-
-Primary CTA:
-- Start Learning
-
-The CTA should navigate to the learning page.
-
-## Learning Topics
-
-Display five topic cards:
-
-1. Copyright
-2. Patents
-3. Trademarks
-4. Plagiarism
-5. Innovation & Design
-
-Each topic card should contain:
-- Topic icon
-- Topic category label
-- Topic title
-- Short description
-- Difficulty badge
-- Progress indicator
-- Lesson count
-- XP reward
-- Learn Now button
-- Hover state
-
-Use a responsive layout:
-- 1 column on mobile
-- 2 columns on tablets
-- 3 columns on desktop
-
-The fifth card should not look awkward or disconnected.
-Use a balanced grid and consistent card heights.
-
-## Topic-Specific Visual Identity
-
-Copyright:
-- Book, document, or music icon
-- Blue accent
-
-Patents:
-- Lightbulb, invention, or gear icon
-- Orange accent
-
-Trademarks:
-- Shield, badge, or brand icon
-- Green accent
-
-Plagiarism:
-- Copy, document-check, or originality icon
-- Pink or red accent used carefully
-
-Innovation & Design:
-- Sparkles, rocket, palette, or lightbulb icon
-- Purple accent
-
-## Card Interactions
-
-Cards should:
-- Have subtle shadow
-- Increase elevation slightly on hover
-- Show a visible Learn Now action
-- Use accessible focus states
-- Preserve readable contrast
-- Avoid excessive animation
-
-## Page Layout
-
-Every page should include:
-- Consistent maximum content width
-- Responsive horizontal padding
-- Clear page heading
-- Short introductory description
-- Adequate spacing between sections
-
-Do not allow the navbar to overlap the page heading.
-
-## Accessibility
-
-- Use semantic HTML.
-- Add accessible labels to icon buttons.
-- Do not rely only on color to communicate meaning.
-- Maintain readable contrast.
-- Ensure keyboard navigation works.
-- Use descriptive button text.
+- Continue using Appwrite-backed topic, lesson, profile, progress, quiz, and assignment data.
+- Do not create fake learner statistics, sample records, or static dashboard progress.
+- Keep `AuthGuard`, server authorization, route contracts, and API boundaries unchanged during visual work.
+- When data is unavailable, show loading, error, or empty states instead of placeholder records.
+- `/games` uses the existing Gamification local-storage state and game interactions; visual updates must not alter its game state or callbacks.

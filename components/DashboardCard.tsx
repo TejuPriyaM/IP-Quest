@@ -1,3 +1,5 @@
+import { BarChart3, Flame, Sparkles, type LucideIcon } from 'lucide-react';
+
 type DashboardCardProps = {
   title: string;
   value: string;
@@ -5,21 +7,29 @@ type DashboardCardProps = {
   tone?: 'blue' | 'green' | 'amber' | 'violet';
 };
 
+const metricIcons: Record<string, LucideIcon> = {
+  'Learning progress': BarChart3,
+  'Points earned': Sparkles,
+  'Quiz streak': Flame,
+};
+
 const toneClasses = {
-  blue: 'bg-blue-50 text-blue-700',
-  green: 'bg-emerald-50 text-emerald-700',
-  amber: 'bg-amber-50 text-amber-700',
-  violet: 'bg-violet-50 text-violet-700',
+  blue: 'metric-tone-blue',
+  green: 'metric-tone-green',
+  amber: 'metric-tone-amber',
+  violet: 'metric-tone-violet',
 };
 
 export default function DashboardCard({ title, value, change, tone = 'blue' }: DashboardCardProps) {
+  const Icon = metricIcons[title] ?? BarChart3;
   return (
-    <div className="glass-card p-5">
-      <div className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${toneClasses[tone]}`}>
-        {title}
+    <div className={`glass-card metric-card p-5 ${toneClasses[tone]}`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-bold uppercase text-slate-500">{title}</p>
+        <span className="metric-icon" aria-hidden="true"><Icon size={17} strokeWidth={1.9} /></span>
       </div>
-      <p className="mt-4 text-3xl font-bold text-slate-900">{value}</p>
-      <p className="mt-2 text-sm text-slate-600">{change}</p>
+      <p className="mt-3 break-words font-display text-3xl font-bold text-slate-900">{value}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{change}</p>
     </div>
   );
 }

@@ -50,7 +50,7 @@ function QuizPageContent() {
 
   return (
     <AuthGuard allowedRoles={['student']}>
-    <main className="section-shell py-14 sm:py-16">
+    <main className="section-shell workspace-page py-14 sm:py-16">
       <SectionHeader
         title={selectedTopic ? `${selectedTopic.title} Quiz` : 'IP Quiz Challenge'}
         description={selectedTopic

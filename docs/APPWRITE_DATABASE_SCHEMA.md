@@ -18,6 +18,21 @@ Fields:
 - total_points: Integer
 - created_at: Datetime
 
+## Table: password_recovery
+
+Purpose: Store short-lived password recovery challenges and atomic rate/one-time-use claims. This table is server-only; disable table-level client permissions and create all rows with empty permissions.
+
+Fields (all columns except `record_type` and `created_at` must be optional):
+- record_type: Varchar (32)
+- user_id: Varchar (36, optional)
+- request_id: Varchar (36, optional)
+- code_hash: Varchar (64, optional; HMAC only, never the plaintext code)
+- reset_hash: Varchar (64, optional; HMAC only, never the plaintext reset token)
+- expires_at: Datetime (optional)
+- created_at: Datetime
+
+Create an index on `created_at` so the server can prune recovery records older than 24 hours. Use the table ID `password_recovery`. Recovery uses deterministic opaque row IDs and does not store email addresses; no public permissions should be granted.
+
 ## Table: topics
 
 Purpose: Store learning topics.

@@ -2,16 +2,21 @@ type SectionHeaderProps = {
   title: string;
   description: string;
   align?: 'left' | 'center';
+  eyebrow?: string;
+  level?: 1 | 2;
 };
 
-export default function SectionHeader({ title, description, align = 'left' }: SectionHeaderProps) {
+export default function SectionHeader({ title, description, align = 'left', eyebrow = 'IP Quest', level = 1 }: SectionHeaderProps) {
   const alignment = align === 'center' ? 'mx-auto text-center' : '';
+  const heading = level === 1
+    ? <h1 className="page-title">{title}</h1>
+    : <h2 className="page-title">{title}</h2>;
 
   return (
-    <div className={`max-w-2xl ${alignment}`}>
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Learning</p>
-      <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900">{title}</h2>
-      <p className="mt-3 text-base text-slate-600">{description}</p>
+    <div className={`page-header ${alignment}`}>
+      <p className="page-kicker">{eyebrow}</p>
+      {heading}
+      <p className="page-description">{description}</p>
     </div>
   );
 }

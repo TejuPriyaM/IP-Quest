@@ -1,16 +1,17 @@
 'use client';
 
 import Link from 'next/link';
+import { BookOpen, ChartNoAxesColumnIncreasing, ClipboardCheck, FileText, MessageSquareText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import { getCurrentProfile, getCurrentUser } from '@/lib/auth';
 
 const dashboardCards = [
-  { title: 'Topics', description: 'Manage learning topics.', href: '/teacher/topics', icon: 'T', tone: 'blue' },
-  { title: 'Lessons', description: 'Create and manage lesson content.', href: '/teacher/lessons', icon: 'L', tone: 'green' },
-  { title: 'Topic Assessment', description: 'Complete topic assessment data before creating or updating a topic.', href: '/teacher/assessment', icon: 'A', tone: 'amber' },
-  { title: 'Questions / Quizzes', description: 'Manage quiz questions and assessments.', href: '/teacher/questions', icon: 'Q', tone: 'amber' },
-  { title: 'Student Progress', description: 'View student learning progress.', href: '/teacher/progress', icon: 'P', tone: 'violet' },
+  { title: 'Topics', description: 'Manage learning topics.', href: '/teacher/topics', icon: BookOpen, tone: 'blue' },
+  { title: 'Lessons', description: 'Create and manage lesson content.', href: '/teacher/lessons', icon: FileText, tone: 'green' },
+  { title: 'Topic Assessment', description: 'Complete topic assessment data before creating or updating a topic.', href: '/teacher/assessment', icon: ClipboardCheck, tone: 'amber' },
+  { title: 'Questions / Quizzes', description: 'Manage quiz questions and assessments.', href: '/teacher/questions', icon: MessageSquareText, tone: 'amber' },
+  { title: 'Student Progress', description: 'View student learning progress.', href: '/teacher/progress', icon: ChartNoAxesColumnIncreasing, tone: 'violet' },
 ] as const;
 
 const toneClasses = {
@@ -41,8 +42,8 @@ export default function TeacherPage() {
 
   return (
     <AuthGuard allowedRoles={['teacher']}>
-      <main className="section-shell py-10 sm:py-14">
-        <section className="rounded-3xl bg-brand-900 p-8 text-white shadow-soft sm:p-10">
+      <main className="section-shell workspace-page py-10 sm:py-14">
+        <section className="workspace-hero p-7 text-white sm:p-9">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-blue-200">Teacher workspace</p>
           <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Teacher Dashboard</h1>
           <p className="mt-3 max-w-2xl text-blue-100">Manage learning content and monitor your students.</p>
@@ -62,7 +63,7 @@ export default function TeacherPage() {
                     <h3 className="text-xl font-bold text-slate-900 group-hover:text-brand-700">{card.title}</h3>
                     <p className="mt-2 text-sm leading-6 text-slate-600">{card.description}</p>
                   </div>
-                  <span className={`inline-flex h-10 min-w-10 items-center justify-center rounded-xl px-2 text-sm font-bold ring-1 ${toneClasses[card.tone]}`} aria-hidden="true">{card.icon}</span>
+                  <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${toneClasses[card.tone]}`} aria-hidden="true"><card.icon size={18} strokeWidth={1.8} /></span>
                 </div>
                 <span className="mt-6 inline-flex text-sm font-bold text-brand-700">Open workspace <span className="ml-2" aria-hidden="true">-&gt;</span></span>
               </Link>
